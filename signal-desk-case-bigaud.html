@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operation Bigaud — Signal Desk Investigation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Serif:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0f0e0c;
+    --paper: #f5f0e8;
+    --paper-dark: #ede7d9;
+    --red: #c41a1a;
+    --grey: #6b6560;
+    --grey-light: #b8b0a5;
+    --rule: #2a2520;
+    --conf-high: #052e16;
+    --conf-high-text: #86efac;
+    --conf-med: #451a03;
+    --conf-med-text: #fcd34d;
+    --conf-low: #1e1b4b;
+    --conf-low-text: #a5b4fc;
+    --conf-unres: #1c1917;
+    --conf-unres-text: #a8a29e;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { background:var(--paper); color:var(--ink); font-family:'IBM Plex Serif',serif; font-weight:300; overflow-x:hidden; }
+
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events:none; z-index:999; opacity:.4;
+  }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes drawLine { from{width:0} to{width:100%} }
+  @keyframes popIn { from{opacity:0;transform:scale(0.92)} to{opacity:1;transform:scale(1)} }
+  @keyframes redactReveal {
+    0%,40%{background:var(--ink); color:transparent;}
+    60%,100%{background:transparent; color:var(--ink);}
+  }
+  .fade1{animation:fadeUp .7s .1s both}
+  .fade2{animation:fadeUp .7s .25s both}
+  .fade3{animation:fadeUp .7s .4s both}
+  .fade4{animation:fadeUp .7s .55s both}
+
+  /* NAV */
+  nav {
+    position:fixed; top:0; left:0; right:0; z-index:100;
+    background:var(--ink); border-bottom:3px solid var(--red);
+    padding:0 48px; height:52px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .nav-brand { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:500; letter-spacing:.2em; color:var(--paper); text-decoration:none; display:flex; align-items:center; gap:10px; }
+  .nav-dot { width:7px; height:7px; border-radius:50%; background:var(--red); animation:blink 2s infinite; }
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .nav-back { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.12em; color:var(--grey-light); text-decoration:none; text-transform:uppercase; }
+  .nav-back:hover{color:var(--paper);}
+  .nav-cta { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.12em; color:var(--ink); background:var(--paper); border:none; padding:7px 18px; cursor:pointer; text-transform:uppercase; text-decoration:none; transition:background .2s; }
+  .nav-cta:hover{background:var(--red);color:#fff;}
+
+  /* CASE HERO */
+  .case-hero {
+    padding:52px 0 0;
+    border-bottom:1px solid rgba(15,14,12,.15);
+    background: linear-gradient(180deg, #0f0e0c 0%, #1a1510 60%, var(--paper) 100%);
+  }
+
+  .case-meta-bar {
+    padding:20px 64px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    border-bottom:1px solid rgba(245,240,232,.08);
+  }
+
+  .badge {
+    font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.15em;
+    padding:3px 10px; border-radius:2px; text-transform:uppercase;
+  }
+  .badge-case { background:rgba(196,26,26,.2); color:#f87171; border:1px solid rgba(196,26,26,.3); }
+  .badge-type { background:rgba(245,240,232,.1); color:rgba(245,240,232,.5); border:1px solid rgba(245,240,232,.12); }
+  .badge-status-live { background:#052e16; color:#86efac; border:1px solid #14532d; }
+
+  .case-hero-content {
+    padding:56px 64px 64px;
+    max-width:900px;
+  }
+
+  .case-dateline {
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.15em;
+    color:rgba(245,240,232,.35); margin-bottom:20px; text-transform:uppercase;
+  }
+
+  .case-headline {
+    font-family:'Playfair Display',serif; font-size:clamp(36px,5vw,64px);
+    font-weight:900; line-height:.95; letter-spacing:-.02em;
+    color:var(--paper); margin-bottom:24px;
+  }
+  .case-headline em { font-style:italic; color:var(--red); }
+
+  .case-deck {
+    font-family:'IBM Plex Serif',serif; font-size:18px; font-weight:300;
+    line-height:1.65; color:rgba(245,240,232,.6); max-width:680px;
+    margin-bottom:48px; border-left:3px solid var(--red); padding-left:20px;
+  }
+
+  .case-stats {
+    display:flex; gap:48px; flex-wrap:wrap;
+    padding:24px 0; border-top:1px solid rgba(245,240,232,.08);
+  }
+  .case-stat-item { display:flex; flex-direction:column; gap:4px; }
+  .case-stat-n { font-family:'Playfair Display',serif; font-size:36px; font-weight:900; color:var(--paper); line-height:1; }
+  .case-stat-l { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.15em; color:rgba(245,240,232,.3); text-transform:uppercase; }
+
+  /* BODY LAYOUT */
+  .case-body { max-width:1200px; margin:0 auto; padding:0 64px; }
+
+  /* VIDEO SECTION */
+  .video-section { padding:64px 0 48px; border-bottom:1px solid rgba(15,14,12,.1); }
+
+  .section-label {
+    font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.2em;
+    color:var(--red); text-transform:uppercase; margin-bottom:16px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .section-label::after { content:''; flex:1; height:1px; background:rgba(15,14,12,.1); }
+
+  .video-primary {
+    background:var(--ink); aspect-ratio:16/9; border:1px solid rgba(245,240,232,.08);
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom:16px; position:relative; overflow:hidden;
+    cursor:pointer;
+  }
+  .video-primary::before {
+    content:''; position:absolute; inset:0;
+    background:linear-gradient(135deg, rgba(196,26,26,.05) 0%, transparent 60%);
+  }
+  .video-placeholder-text {
+    font-family:'Playfair Display',serif; font-size:24px; font-weight:700;
+    color:rgba(245,240,232,.15); text-align:center; padding:32px;
+    line-height:1.3;
+  }
+  .play-btn {
+    position:absolute; width:72px; height:72px; border-radius:50%;
+    background:var(--red); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:transform .2s, background .2s;
+  }
+  .play-btn:hover{transform:scale(1.1); background:#a01515;}
+  .play-btn svg{margin-left:4px;}
+
+  .reels-row {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:12px;
+  }
+  .reel-thumb {
+    background:var(--ink); aspect-ratio:9/16; max-height:200px;
+    border:1px solid rgba(245,240,232,.06); cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    position:relative; overflow:hidden; transition:border-color .2s;
+  }
+  .reel-thumb:hover{border-color:var(--red);}
+  .reel-label {
+    position:absolute; bottom:10px; left:10px; right:10px;
+    font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.08em;
+    color:rgba(245,240,232,.6); line-height:1.4;
+  }
+  .reel-play { width:36px; height:36px; border-radius:50%; background:rgba(196,26,26,.7); display:flex; align-items:center; justify-content:center; }
+
+  /* FINDINGS */
+  .findings-section { padding:64px 0; border-bottom:1px solid rgba(15,14,12,.1); }
+
+  .findings-grid { display:flex; flex-direction:column; gap:12px; }
+
+  .finding-card {
+    background:#fff; border:1px solid rgba(15,14,12,.1);
+    border-left:4px solid var(--ink);
+    padding:24px 28px; display:grid;
+    grid-template-columns:1fr auto; gap:16px; align-items:start;
+    transition:border-left-color .2s, box-shadow .2s;
+    cursor:pointer;
+  }
+  .finding-card:hover { border-left-color:var(--red); box-shadow:4px 4px 0 rgba(15,14,12,.06); }
+  .finding-card.unresolved { border-left-color:var(--grey-light); background:var(--paper); }
+
+  .finding-number { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.15em; color:var(--grey-light); margin-bottom:8px; }
+  .finding-statement { font-family:'IBM Plex Serif',serif; font-size:16px; font-weight:400; line-height:1.6; color:var(--ink); margin-bottom:12px; }
+  .finding-sources { font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.08em; color:var(--grey); }
+
+  .conf-badge {
+    font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.1em;
+    padding:4px 10px; border-radius:2px; text-transform:uppercase;
+    white-space:nowrap; align-self:flex-start;
+  }
+  .conf-high   { background:var(--conf-high); color:var(--conf-high-text); }
+  .conf-med    { background:var(--conf-med); color:var(--conf-med-text); }
+  .conf-partial{ background:var(--conf-low); color:var(--conf-low-text); }
+  .conf-unres  { background:var(--conf-unres); color:var(--conf-unres-text); }
+
+  /* EVIDENCE TIMELINE */
+  .timeline-section { padding:64px 0; border-bottom:1px solid rgba(15,14,12,.1); }
+
+  .timeline { position:relative; padding-left:32px; }
+  .timeline::before { content:''; position:absolute; left:7px; top:8px; bottom:8px; width:2px; background:rgba(15,14,12,.1); }
+
+  .timeline-item {
+    position:relative; margin-bottom:24px;
+    display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start;
+  }
+
+  .timeline-dot {
+    position:absolute; left:-29px; top:6px;
+    width:14px; height:14px; border-radius:50%;
+    background:var(--paper); border:2px solid rgba(15,14,12,.2);
+    transition:border-color .2s, background .2s;
+  }
+  .timeline-item:hover .timeline-dot { border-color:var(--red); background:var(--red); }
+
+  .timeline-card {
+    background:#fff; border:1px solid rgba(15,14,12,.08);
+    padding:16px 20px; transition:box-shadow .2s;
+  }
+  .timeline-item:hover .timeline-card { box-shadow:3px 3px 0 rgba(15,14,12,.05); }
+
+  .timeline-evd-id { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.15em; color:var(--red); margin-bottom:6px; }
+  .timeline-source { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; color:var(--ink); margin-bottom:4px; }
+  .timeline-summary { font-family:'IBM Plex Serif',serif; font-size:13px; line-height:1.55; color:var(--grey); }
+
+  .archive-badge {
+    font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.08em;
+    color:#86efac; background:#052e16; border:1px solid #14532d;
+    padding:3px 8px; border-radius:2px; white-space:nowrap; align-self:flex-start;
+  }
+
+  /* CORPORATE CHAIN */
+  .chain-section { padding:64px 0; border-bottom:1px solid rgba(15,14,12,.1); }
+
+  .chain-diagram {
+    display:flex; align-items:center; justify-content:center;
+    gap:0; padding:40px; background:var(--ink);
+    border:1px solid rgba(245,240,232,.06); flex-wrap:wrap;
+  }
+
+  .chain-node {
+    background:rgba(245,240,232,.05); border:1px solid rgba(245,240,232,.12);
+    padding:20px 24px; text-align:center; min-width:160px;
+    position:relative; animation:popIn .5s ease both;
+  }
+  .chain-node:nth-child(1){animation-delay:.1s}
+  .chain-node:nth-child(3){animation-delay:.3s}
+  .chain-node:nth-child(5){animation-delay:.5s}
+  .chain-node:nth-child(7){animation-delay:.7s}
+
+  .chain-flag { font-size:24px; margin-bottom:8px; }
+  .chain-jurisdiction { font-family:'IBM Plex Mono',monospace; font-size:8px; letter-spacing:.15em; color:var(--red); text-transform:uppercase; margin-bottom:4px; }
+  .chain-name { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; color:var(--paper); margin-bottom:4px; }
+  .chain-type { font-family:'IBM Plex Mono',monospace; font-size:9px; color:rgba(245,240,232,.35); }
+
+  .chain-arrow {
+    font-size:20px; color:var(--red); padding:0 8px;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+  }
+  .chain-arrow span { font-family:'IBM Plex Mono',monospace; font-size:8px; letter-spacing:.08em; color:rgba(245,240,232,.3); }
+
+  .chain-amount {
+    font-family:'Playfair Display',serif; font-size:20px; font-weight:900;
+    color:var(--red); text-align:center; margin-top:24px;
+  }
+  .chain-amount-label { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.12em; color:rgba(245,240,232,.3); text-align:center; margin-top:4px; }
+
+  /* DOCUMENT VIEWER */
+  .doc-section { padding:64px 0; border-bottom:1px solid rgba(15,14,12,.1); }
+
+  .doc-viewer {
+    background:#fff; border:1px solid rgba(15,14,12,.12);
+    box-shadow:8px 8px 0 rgba(15,14,12,.06);
+    font-family:'IBM Plex Mono',monospace; font-size:11px;
+    max-width:720px;
+  }
+
+  .doc-toolbar {
+    background:var(--paper-dark); border-bottom:1px solid rgba(15,14,12,.1);
+    padding:10px 16px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .doc-toolbar-left { display:flex; align-items:center; gap:8px; }
+  .doc-dot { width:10px; height:10px; border-radius:50%; }
+
+  .doc-inner { padding:32px; }
+  .doc-watermark {
+    font-family:'Playfair Display',serif; font-size:72px; font-weight:900;
+    color:rgba(15,14,12,.04); position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%) rotate(-25deg); pointer-events:none;
+    white-space:nowrap;
+  }
+
+  .doc-header-stamp {
+    display:flex; justify-content:space-between; margin-bottom:20px;
+    padding-bottom:12px; border-bottom:2px solid var(--ink);
+  }
+  .doc-brand { font-size:10px; letter-spacing:.2em; color:var(--ink); }
+  .doc-case-id { font-size:10px; color:var(--grey); }
+
+  .doc-classification {
+    text-align:center; margin-bottom:20px;
+  }
+  .doc-class-badge {
+    display:inline-block; border:1px solid var(--red);
+    padding:3px 16px; font-size:9px; letter-spacing:.25em; color:var(--red);
+  }
+
+  .doc-h1 { font-family:'Playfair Display',serif; font-size:20px; font-weight:700; margin-bottom:4px; color:var(--ink); }
+  .doc-sub { font-size:10px; color:var(--grey); margin-bottom:16px; letter-spacing:.05em; }
+  .doc-rule { border:none; border-top:2px solid var(--ink); margin:14px 0; }
+  .doc-section-label { font-size:8px; letter-spacing:.2em; color:var(--red); text-transform:uppercase; margin-bottom:8px; margin-top:16px; }
+
+  .doc-finding {
+    padding:10px 12px; background:var(--paper); border-left:3px solid var(--ink);
+    margin-bottom:8px;
+  }
+  .doc-finding-text { font-size:10px; line-height:1.55; color:var(--ink); margin-bottom:6px; }
+
+  .redact {
+    display:inline-block; background:var(--ink); color:transparent;
+    border-radius:1px; user-select:none; cursor:pointer;
+    transition:background .3s, color .3s;
+  }
+  .redact:hover { background:transparent; color:var(--ink); text-decoration:underline dotted var(--grey-light); }
+
+  .doc-evidence-row { display:flex; justify-content:space-between; border-bottom:1px solid rgba(15,14,12,.07); padding:5px 0; font-size:9px; color:var(--grey); }
+  .doc-archived { color:var(--red); }
+
+  .doc-stamp-approved {
+    display:inline-block; border:3px solid rgba(34,197,94,.3);
+    padding:6px 14px; font-size:10px; letter-spacing:.15em; color:rgba(34,197,94,.5);
+    transform:rotate(-6deg); margin-top:16px;
+  }
+
+  .doc-download-row {
+    display:flex; gap:12px; margin-top:16px; padding-top:16px;
+    border-top:1px solid rgba(15,14,12,.08);
+  }
+
+  .btn-sm {
+    font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.1em;
+    text-transform:uppercase; padding:8px 16px; border:1px solid; cursor:pointer;
+    text-decoration:none; display:inline-block; transition:all .2s;
+  }
+  .btn-sm-dark { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .btn-sm-dark:hover { background:var(--red); border-color:var(--red); }
+  .btn-sm-outline { background:transparent; color:var(--ink); border-color:rgba(15,14,12,.3); }
+  .btn-sm-outline:hover { border-color:var(--ink); }
+
+  /* METHODOLOGY */
+  .method-section { padding:64px 0; border-bottom:1px solid rgba(15,14,12,.1); }
+
+  .tools-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:8px; }
+  .tool-card {
+    background:#fff; border:1px solid rgba(15,14,12,.08);
+    padding:16px; transition:box-shadow .2s;
+  }
+  .tool-card:hover{box-shadow:3px 3px 0 rgba(15,14,12,.06);}
+  .tool-name { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; color:var(--ink); margin-bottom:4px; }
+  .tool-cat { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.1em; color:var(--red); text-transform:uppercase; margin-bottom:6px; }
+  .tool-access { font-family:'IBM Plex Mono',monospace; font-size:9px; color:var(--grey); }
+
+  /* CTA */
+  .case-cta {
+    padding:80px 0; text-align:center;
+    background:var(--ink); margin:64px -64px 0;
+    position:relative; overflow:hidden;
+  }
+  .case-cta::before {
+    content:'SIGNAL DESK'; position:absolute; font-family:'Playfair Display',serif;
+    font-size:160px; font-weight:900; color:rgba(245,240,232,.03);
+    top:50%; left:50%; transform:translate(-50%,-50%); white-space:nowrap; pointer-events:none;
+  }
+  .cta-label { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.25em; color:var(--red); text-transform:uppercase; margin-bottom:16px; }
+  .cta-h { font-family:'Playfair Display',serif; font-size:clamp(28px,4vw,48px); font-weight:900; color:var(--paper); line-height:1.1; letter-spacing:-.02em; margin-bottom:16px; }
+  .cta-sub { font-family:'IBM Plex Serif',serif; font-size:16px; color:rgba(245,240,232,.4); font-weight:300; margin-bottom:40px; max-width:480px; margin-left:auto; margin-right:auto; line-height:1.6; }
+  .cta-btns { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .btn-cta-white { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; background:var(--paper); color:var(--ink); border:2px solid var(--paper); padding:12px 28px; cursor:pointer; text-decoration:none; display:inline-block; transition:all .2s; }
+  .btn-cta-white:hover{background:var(--red);border-color:var(--red);color:#fff;}
+  .btn-cta-outline { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; background:transparent; color:rgba(245,240,232,.5); border:2px solid rgba(245,240,232,.2); padding:12px 28px; cursor:pointer; text-decoration:none; display:inline-block; transition:all .2s; }
+  .btn-cta-outline:hover{border-color:var(--paper);color:var(--paper);}
+
+  /* FOOTER */
+  footer { background:var(--ink); padding:24px 64px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(245,240,232,.06); }
+  .footer-brand { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.15em; color:rgba(245,240,232,.3); }
+  .footer-legal { font-family:'IBM Plex Mono',monospace; font-size:9px; letter-spacing:.08em; color:rgba(245,240,232,.15); max-width:600px; line-height:1.7; text-align:right; }
+
+  @media(max-width:900px){
+    nav{padding:0 20px;}
+    .case-meta-bar,.case-hero-content{padding-left:24px;padding-right:24px;}
+    .case-body{padding:0 24px;}
+    .case-stats{gap:24px;}
+    .chain-diagram{padding:24px 16px;}
+    .chain-node{min-width:120px;padding:14px 16px;}
+    .tools-grid{grid-template-columns:repeat(2,1fr);}
+    .case-cta{margin:48px -24px 0;padding:60px 24px;}
+    footer{flex-direction:column;gap:12px;padding:20px 24px;text-align:center;}
+    .footer-legal{text-align:center;}
+    .reels-row{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="nav-brand"><div class="nav-dot"></div>SIGNAL DESK</a>
+  <a href="index.html#cases" class="nav-back">← All Cases</a>
+  <a href="mailto:brief@signaldesk.co.uk" class="nav-cta">Submit a Brief</a>
+</nav>
+
+<!-- HERO -->
+<section class="case-hero">
+  <div class="case-meta-bar fade1">
+    <span class="badge badge-case">CASE-2025-0021</span>
+    <span class="badge badge-type">Journalist Support · Public Interest</span>
+    <span class="badge badge-status-live">● Published 31 Mar 2026</span>
+  </div>
+  <div class="case-hero-content">
+    <div class="case-dateline fade1">Czech Republic · France · BVI · Monaco · 2009–present</div>
+    <h1 class="case-headline fade2">
+      The <em>$22 Million</em><br>Chateau Nobody<br>Was Meant to Find
+    </h1>
+    <p class="case-deck fade3">
+      How a future prime minister used a chain of shell companies across four jurisdictions to secretly acquire a French Riviera estate — and how public records tell the whole story.
+    </p>
+    <div class="case-stats fade4">
+      <div class="case-stat-item"><div class="case-stat-n">8</div><div class="case-stat-l">Evidence items preserved</div></div>
+      <div class="case-stat-item"><div class="case-stat-n">5</div><div class="case-stat-l">Confirmed findings</div></div>
+      <div class="case-stat-item"><div class="case-stat-n">4</div><div class="case-stat-l">Jurisdictions traced</div></div>
+      <div class="case-stat-item"><div class="case-stat-n">0</div><div class="case-stat-l">Private sources used</div></div>
+    </div>
+  </div>
+</section>
+
+<div class="case-body">
+
+  <!-- VIDEO -->
+  <section class="video-section">
+    <div class="section-label">Investigation Films</div>
+    <div class="video-primary">
+      <div class="video-placeholder-text">"The Chateau, The Shell Companies,<br>and the Paper Trail"<br><span style="font-size:14px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:rgba(245,240,232,.2);">Deep Dive Documentary · 14 min · Coming Soon</span></div>
+      <div class="play-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+      </div>
+    </div>
+    <div class="reels-row">
+      <div class="reel-thumb">
+        <div class="reel-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="reel-label">The corporate chain explained in 60 seconds</div>
+      </div>
+      <div class="reel-thumb">
+        <div class="reel-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="reel-label">What a back-to-back loan scheme looks like</div>
+      </div>
+      <div class="reel-thumb">
+        <div class="reel-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="reel-label">How the French investigation started</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CORPORATE CHAIN -->
+  <section class="chain-section">
+    <div class="section-label">The Corporate Chain</div>
+    <div class="chain-diagram">
+      <div style="width:100%;">
+        <div style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:0;">
+          <div class="chain-node">
+            <div class="chain-flag">🇧🇻</div>
+            <div class="chain-jurisdiction">British Virgin Islands</div>
+            <div class="chain-name">Blakey Finance Ltd</div>
+            <div class="chain-type">Shell company · Alcogal</div>
+          </div>
+          <div class="chain-arrow">→<span>$22M injected</span></div>
+          <div class="chain-node">
+            <div class="chain-flag">🇺🇸</div>
+            <div class="chain-jurisdiction">Washington D.C.</div>
+            <div class="chain-name" style="color:rgba(245,240,232,.4);">Entity<br><span style="font-size:9px;color:rgba(245,240,232,.2);">[Name unconfirmed]</span></div>
+            <div class="chain-type">Intermediary</div>
+          </div>
+          <div class="chain-arrow">→<span>"back-to-back loan"</span></div>
+          <div class="chain-node">
+            <div class="chain-flag">🇲🇨</div>
+            <div class="chain-jurisdiction">Monaco</div>
+            <div class="chain-name">SCP Bigaud</div>
+            <div class="chain-type">SCI property vehicle</div>
+          </div>
+          <div class="chain-arrow">→<span>title held</span></div>
+          <div class="chain-node" style="border-color:var(--red);border-width:2px;">
+            <div class="chain-flag">🇫🇷</div>
+            <div class="chain-jurisdiction">Mougins, France</div>
+            <div class="chain-name">Chateau Bigaud</div>
+            <div class="chain-type">9.4 acres · 5 bed</div>
+          </div>
+        </div>
+        <div class="chain-amount">$22,000,000</div>
+        <div class="chain-amount-label">Routed through 3 jurisdictions · July–December 2009 · Source of funds: UNRESOLVED</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINDINGS -->
+  <section class="findings-section">
+    <div class="section-label">Key Findings</div>
+    <div class="findings-grid">
+
+      <div class="finding-card">
+        <div>
+          <div class="finding-number">CLAIM-001</div>
+          <div class="finding-statement">Andrej Babiš used Blakey Finance Ltd — a British Virgin Islands shell company established via Panamanian firm Alcogal — to inject $22 million for the acquisition of Chateau Bigaud in 2009. Funds were structured as a back-to-back loan routed through BVI, Washington D.C., and Monaco.</div>
+          <div class="finding-sources">EVD-001 · EVD-002 · EVD-004 · 3 independent sources</div>
+        </div>
+        <span class="conf-badge conf-high">HIGH</span>
+      </div>
+
+      <div class="finding-card">
+        <div>
+          <div class="finding-number">CLAIM-002</div>
+          <div class="finding-statement">The corporate structure constitutes a "loan-back" scheme — a method described by former financial crime investigator Kamil Kouba as "textbook." The structure allows funds to appear as a legitimate loan while concealing beneficial ownership and potentially reducing tax liability on capital gains.</div>
+          <div class="finding-sources">EVD-001 · EVD-004 · Expert testimony on record</div>
+        </div>
+        <span class="conf-badge conf-high">HIGH</span>
+      </div>
+
+      <div class="finding-card">
+        <div>
+          <div class="finding-number">CLAIM-003</div>
+          <div class="finding-statement">None of the shell companies or Chateau Bigaud appeared in any of Babiš's mandatory Czech political asset declarations after he entered politics in 2013, despite Czech law requiring full disclosure of all properties and assets.</div>
+          <div class="finding-sources">EVD-005 · Official Czech government records via Investigace.cz</div>
+        </div>
+        <span class="conf-badge conf-high">HIGH</span>
+      </div>
+
+      <div class="finding-card">
+        <div>
+          <div class="finding-number">CLAIM-004</div>
+          <div class="finding-statement">France's Central Office Against Corruption, Financial and Fiscal Offences (OCLCIFF) opened a formal money laundering investigation into Babiš in February 2022, examining whether the back-to-back loan was used to launder the proceeds of tax fraud. The investigation remains ongoing.</div>
+          <div class="finding-sources">EVD-003 · Le Monde / ICIJ reporting</div>
+        </div>
+        <span class="conf-badge conf-high">HIGH</span>
+      </div>
+
+      <div class="finding-card">
+        <div>
+          <div class="finding-number">CLAIM-005</div>
+          <div class="finding-statement">SynBiol, a subsidiary within the Agrofert conglomerate controlled by Babiš via trusts, declared acquisition of the Monaco entities in its 2018 financial statements. The companies were merged into a SynBiol subsidiary by 2020.</div>
+          <div class="finding-sources">EVD-007 · SynBiol financial statements</div>
+        </div>
+        <span class="conf-badge conf-partial">PARTIAL</span>
+      </div>
+
+      <div class="finding-card unresolved">
+        <div>
+          <div class="finding-number">UNRESOLVED</div>
+          <div class="finding-statement">The original source of the $22 million injected into Blakey Finance Ltd has not been established in any public record. This is the central question of the French criminal investigation. <span class="redact" title="Click to reveal redaction note">&nbsp;SUBJECT OF ACTIVE INVESTIGATION&nbsp;</span></div>
+          <div class="finding-sources">This question remains open · French probe ongoing</div>
+        </div>
+        <span class="conf-badge conf-unres">UNRESOLVED</span>
+      </div>
+
+    </div>
+    <div style="margin-top:16px;padding:12px 16px;background:rgba(15,14,12,.04);border-left:2px solid var(--grey-light);">
+      <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--grey);line-height:1.6;">Babiš response on record: <em>"I did nothing illegal or wrong."</em> His office revoked press accreditation for three ICIJ partners rather than answering submitted questions at time of original publication (October 2021). Agrofert stated Chateau Bigaud "is not related in any way" to them.</p>
+    </div>
+  </section>
+
+  <!-- TIMELINE -->
+  <section class="timeline-section">
+    <div class="section-label">Evidence Timeline — 8 Items Preserved</div>
+    <div class="timeline">
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-card">
+          <div class="timeline-evd-id">EVD-001 · Collected 31 Mar 2026</div>
+          <div class="timeline-source">ICIJ Pandora Papers Investigation Report (2021)</div>
+          <div class="timeline-summary">Primary investigative report confirming Babiš injected $22M into BVI company via Alcogal Panama. Identifies Blakey Finance Ltd and the Monaco SCP Bigaud property vehicle.</div>
+        </div>
+        <span class="archive-badge">archive.today ✓</span>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-card">
+          <div class="timeline-evd-id">EVD-002 · Collected 31 Mar 2026</div>
+          <div class="timeline-source">ICIJ Offshore Leaks Database</div>
+          <div class="timeline-summary">Blakey Finance Ltd confirmed in public leaked database. Registered British Virgin Islands. Linked entity: Andrej Babiš. Searchable at offshoreleaks.icij.org.</div>
+        </div>
+        <span class="archive-badge">Wayback ✓</span>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-card">
+          <div class="timeline-evd-id">EVD-003 · Collected 31 Mar 2026</div>
+          <div class="timeline-source">ICIJ / Le Monde — French Investigation Report (2022)</div>
+          <div class="timeline-summary">Confirms France's OCLCIFF opened formal money laundering probe February 2022. Investigating whether back-to-back loan laundered proceeds of tax fraud. Investigation ongoing.</div>
+        </div>
+        <span class="archive-badge">archive.today ✓</span>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-card">
+          <div class="timeline-evd-id">EVD-004 · Collected 31 Mar 2026</div>
+          <div class="timeline-source">VSquare / Investigace.cz — Corporate Structure Analysis</div>
+          <div class="timeline-summary">Detailed breakdown of BVI→DC→Monaco fund flow. "Back-to-back loan" structure named. Former financial crime investigator Kamil Kouba describes it as "textbook" scheme.</div>
+        </div>
+        <span class="archive-badge">archive.today ✓</span>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-card">
+          <div class="timeline-evd-id">EVD-005 · Collected 31 Mar 2026</div>
+          <div class="timeline-source">Czech Asset Declaration Records (via Investigace.cz)</div>
+          <div class="timeline-summary">Official Czech government declaration forms confirm Chateau Bigaud and all associated shell companies absent from all Babiš declarations filed post-2013 entry into politics.</div>
+        </div>
+        <span class="archive-badge">Wayback ✓</span>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-card">
+          <div class="timeline-evd-id">EVD-006–008 · Collected 31 Mar 2026</div>
+          <div class="timeline-source">Sotheby's Listing · SynBiol Accounts · OpenSanctions PEP Check</div>
+          <div class="timeline-summary">Property listed for sale at €22.5M (2024). SynBiol declared Monaco entity acquisition in 2018 accounts. Babiš confirmed as PEP — Czech PM 2017–2021, current MEP. No active international sanctions.</div>
+        </div>
+        <span class="archive-badge">All archived ✓</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- DOCUMENT VIEWER -->
+  <section class="doc-section">
+    <div class="section-label">Published Report — Redacted</div>
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:48px;align-items:start;flex-wrap:wrap;">
+      <div class="doc-viewer" style="position:relative;overflow:hidden;">
+        <div class="doc-watermark">PUBLISHED</div>
+        <div class="doc-toolbar">
+          <div class="doc-toolbar-left">
+            <div class="doc-dot" style="background:#ff5f56;"></div>
+            <div class="doc-dot" style="background:#ffbd2e;margin-left:4px;"></div>
+            <div class="doc-dot" style="background:#27c93f;margin-left:4px;"></div>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--grey);">CASE-2025-0021-REDACTED.pdf</span>
+          <span style="font-size:9px;color:var(--grey);">8 pages</span>
+        </div>
+        <div class="doc-inner">
+          <div class="doc-header-stamp">
+            <div class="doc-brand">SIGNAL DESK · RESEARCH DOSSIER</div>
+            <div class="doc-case-id">CASE-2025-0021 · 31 MAR 2026</div>
+          </div>
+          <div class="doc-classification">
+            <span class="doc-class-badge">JOURNALIST SUPPORT · PUBLIC INTEREST · PUBLISHED</span>
+          </div>
+          <div class="doc-h1">Operation Bigaud — Offshore Structure Analysis</div>
+          <div class="doc-sub">SUBJECT: Andrej Babiš · Chateau Bigaud · Mougins, France · $22M acquisition 2009</div>
+          <hr class="doc-rule">
+          <div class="doc-section-label">Executive Summary</div>
+          <p style="font-size:10px;line-height:1.6;color:#333;margin-bottom:12px;">Between 2009 and 2020, a multi-jurisdictional shell company structure routed $22 million through entities in the British Virgin Islands, Washington D.C., and Monaco to acquire Chateau Bigaud in Mougins, France. None of the entities or the property were disclosed in mandatory Czech political asset declarations.</p>
+          <div class="doc-section-label">Key Findings (excerpt)</div>
+          <div class="doc-finding">
+            <div class="doc-finding-text">Corporate chain: Blakey Finance Ltd (BVI) → <span class="redact" title="hover to reveal">DC entity (name unconfirmed)</span> → SCP Bigaud (Monaco). Structured as a back-to-back loan.</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+              <span class="conf-badge conf-high" style="font-size:8px;">HIGH</span>
+              <span style="font-size:9px;color:var(--grey);">EVD-001 · EVD-002 · EVD-004</span>
+            </div>
+          </div>
+          <div class="doc-finding">
+            <div class="doc-finding-text">Chateau Bigaud absent from all Czech asset declarations post-2013. French OCLCIFF probe opened February 2022. Status: ongoing.</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+              <span class="conf-badge conf-high" style="font-size:8px;">HIGH</span>
+              <span style="font-size:9px;color:var(--grey);">EVD-003 · EVD-005</span>
+            </div>
+          </div>
+          <div class="doc-section-label">Evidence Index (8 items)</div>
+          <div class="doc-evidence-row"><span>EVD-001 ICIJ Pandora Papers</span><span class="doc-archived">archive.today ✓</span></div>
+          <div class="doc-evidence-row"><span>EVD-002 ICIJ Offshore Leaks DB</span><span class="doc-archived">Wayback ✓</span></div>
+          <div class="doc-evidence-row"><span>EVD-003 Le Monde / ICIJ</span><span class="doc-archived">archive.today ✓</span></div>
+          <div class="doc-evidence-row" style="border:none;color:var(--grey-light);"><span>+ 5 further items — full index in appendix</span></div>
+          <div style="text-align:right;"><div class="doc-stamp-approved">Human Approved</div></div>
+          <div class="doc-download-row">
+            <a href="#" class="btn-sm btn-sm-dark">Download PDF</a>
+            <a href="#" class="btn-sm btn-sm-outline">View Archive Links</a>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;line-height:1.2;margin-bottom:16px;">Every Signal Desk report includes what most don't.</h3>
+        <p style="font-family:'IBM Plex Serif',serif;font-size:15px;line-height:1.7;color:var(--grey);font-weight:300;margin-bottom:24px;">Hover over the redaction bars to see how we handle unresolved findings. Confidence ratings on every claim. Evidence archived before analysis. The subject's denial noted on the record.</p>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;">
+          <li style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--red);">✦</span><span>Confidence ratings: HIGH / MEDIUM / PARTIAL / UNRESOLVED</span></li>
+          <li style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--red);">✦</span><span>Full evidence index with archive URLs</span></li>
+          <li style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--red);">✦</span><span>Subject response on the record</span></li>
+          <li style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--red);">✦</span><span>Unresolved questions clearly labelled</span></li>
+          <li style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--red);">✦</span><span>Scope and limitations statement</span></li>
+          <li style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink);display:flex;gap:10px;align-items:flex-start;"><span style="color:var(--red);">✦</span><span>Human-reviewed and approved before publication</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- METHODOLOGY -->
+  <section class="method-section">
+    <div class="section-label">Methodology — Tools Used</div>
+    <div class="tools-grid">
+      <div class="tool-card"><div class="tool-cat">Companies & Finance</div><div class="tool-name">ICIJ Offshore Leaks</div><div class="tool-access">Free · No login</div></div>
+      <div class="tool-card"><div class="tool-cat">Companies & Finance</div><div class="tool-name">OCCRP Aleph</div><div class="tool-access">Free · Account</div></div>
+      <div class="tool-card"><div class="tool-cat">Companies & Finance</div><div class="tool-name">OpenSanctions</div><div class="tool-access">Free · API</div></div>
+      <div class="tool-card"><div class="tool-cat">Archiving</div><div class="tool-name">archive.today</div><div class="tool-access">Free · No login</div></div>
+      <div class="tool-card"><div class="tool-cat">Archiving</div><div class="tool-name">Wayback Machine</div><div class="tool-access">Free · No login</div></div>
+      <div class="tool-card"><div class="tool-cat">Data Analysis</div><div class="tool-name">ICIJ Pandora Papers DB</div><div class="tool-access">Free · Public</div></div>
+    </div>
+    <div style="margin-top:20px;padding:16px;background:rgba(15,14,12,.03);border:1px solid rgba(15,14,12,.08);">
+      <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--grey);line-height:1.8;">
+        <span style="color:var(--red);">Legal note:</span> This investigation is based entirely on published public-record sources. Signal Desk has not accessed any private, restricted, or unpublished information. All findings reflect the published record as of 31 March 2026. This is a research support document, not a legal conclusion. It does not assert criminality — that is a matter for French investigators and courts.
+      </p>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="case-cta">
+    <div class="cta-label">Signal Desk · Brief Is Open</div>
+    <h2 class="cta-h">Need research like this<br>for your own case?</h2>
+    <p class="cta-sub">Corporate due diligence, sanctions mapping, journalist research support. Evidence-backed. Auditable. Human-reviewed.</p>
+    <div class="cta-btns">
+      <a href="mailto:brief@signaldesk.co.uk" class="btn-cta-white">Submit a Brief</a>
+      <a href="index.html" class="btn-cta-outline">View All Cases</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="footer-brand">SIGNAL DESK · OPERATION BIGAUD · CASE-2025-0021</div>
+  <div class="footer-legal">All findings based on published public-record sources only. No private data accessed. Subject's denial noted on the record. Human-reviewed before publication. © 2026 Signal Desk · brief@signaldesk.co.uk</div>
+</footer>
+
+<script>
+  // Redaction hover reveal
+  document.querySelectorAll('.redact').forEach(el => {
+    el.addEventListener('click', () => {
+      el.style.background = 'transparent';
+      el.style.color = 'var(--ink)';
+      el.style.borderBottom = '1px dotted var(--grey-light)';
+    });
+  });
+</script>
+</body>
+</html>

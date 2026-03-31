@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal Desk — Lawful Public-Source Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Serif:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0f0e0c;
+    --paper: #f5f0e8;
+    --paper-dark: #ede7d9;
+    --red: #c41a1a;
+    --red-dark: #8b1212;
+    --grey: #6b6560;
+    --grey-light: #b8b0a5;
+    --rule: #2a2520;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-weight: 300;
+    overflow-x: hidden;
+  }
+
+  /* Grain overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.5;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes reveal {
+    from { clip-path: inset(0 100% 0 0); }
+    to   { clip-path: inset(0 0% 0 0); }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; } 50% { opacity: 0; }
+  }
+  @keyframes scanIn {
+    from { opacity: 0; letter-spacing: 0.4em; }
+    to   { opacity: 1; letter-spacing: 0.15em; }
+  }
+
+  .fade-up { animation: fadeUp 0.8s ease forwards; }
+  .fade-up-1 { animation: fadeUp 0.8s 0.1s ease both; }
+  .fade-up-2 { animation: fadeUp 0.8s 0.25s ease both; }
+  .fade-up-3 { animation: fadeUp 0.8s 0.4s ease both; }
+  .fade-up-4 { animation: fadeUp 0.8s 0.55s ease both; }
+  .fade-up-5 { animation: fadeUp 0.8s 0.7s ease both; }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0;
+    background: var(--ink);
+    border-bottom: 3px solid var(--red);
+    padding: 0 48px;
+    height: 52px;
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 100;
+  }
+
+  .nav-brand {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    color: #f5f0e8;
+    text-decoration: none;
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  .nav-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--red);
+    animation: blink 2s infinite;
+  }
+
+  .nav-links {
+    display: flex; gap: 32px; list-style: none;
+  }
+
+  .nav-links a {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: #b8b0a5;
+    text-decoration: none;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: #f5f0e8; }
+
+  .nav-cta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--ink);
+    background: var(--paper);
+    border: none;
+    padding: 7px 18px;
+    cursor: pointer;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: background 0.2s;
+  }
+  .nav-cta:hover { background: var(--red); color: #fff; }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    padding: 52px 0 0;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--ink);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Background grid lines */
+  .hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(15,14,12,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,14,12,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  .hero-dateline {
+    padding: 20px 48px 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--grey);
+    border-bottom: 1px solid rgba(15,14,12,0.15);
+    padding-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: scanIn 1s 0.2s ease both;
+  }
+
+  .hero-dateline span { display: flex; gap: 32px; }
+
+  .hero-main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    border-bottom: 1px solid rgba(15,14,12,0.2);
+  }
+
+  .hero-left {
+    padding: 56px 48px 56px;
+    border-right: 1px solid rgba(15,14,12,0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .hero-kicker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--red);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: clamp(52px, 7vw, 88px);
+    font-weight: 900;
+    line-height: 0.93;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 32px;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--red);
+  }
+
+  .hero-deck {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--grey);
+    max-width: 560px;
+    margin-bottom: 48px;
+    animation: fadeUp 0.8s 0.5s ease both;
+    border-left: 3px solid var(--red);
+    padding-left: 20px;
+  }
+
+  .hero-actions {
+    display: flex; gap: 16px; align-items: center;
+    animation: fadeUp 0.8s 0.65s ease both;
+  }
+
+  .btn-primary {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--ink);
+    color: var(--paper);
+    border: 2px solid var(--ink);
+    padding: 14px 28px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.2s;
+  }
+  .btn-primary:hover { background: var(--red); border-color: var(--red); }
+
+  .btn-secondary {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    padding: 14px 28px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--red); color: var(--red); }
+
+  .hero-right {
+    padding: 40px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: rgba(15,14,12,0.03);
+    animation: fadeUp 0.8s 0.4s ease both;
+  }
+
+  .stat-block {
+    padding: 24px 0;
+    border-bottom: 1px solid rgba(15,14,12,0.12);
+  }
+  .stat-block:last-child { border-bottom: none; }
+
+  .stat-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 42px;
+    font-weight: 900;
+    color: var(--ink);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-number sup { font-size: 18px; color: var(--red); }
+
+  .stat-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--grey);
+    text-transform: uppercase;
+  }
+
+  .redact {
+    display: inline-block;
+    background: var(--ink);
+    color: transparent;
+    border-radius: 1px;
+    user-select: none;
+    position: relative;
+  }
+
+  /* ── TICKER ── */
+  .ticker {
+    background: var(--ink);
+    padding: 10px 0;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .ticker-inner {
+    display: flex;
+    animation: tickerScroll 30s linear infinite;
+    white-space: nowrap;
+  }
+
+  .ticker-inner span {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--grey-light);
+    padding: 0 40px;
+  }
+
+  .ticker-inner span.red { color: var(--red); }
+
+  @keyframes tickerScroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* ── SERVICES ── */
+  .services {
+    padding: 96px 48px;
+    border-bottom: 1px solid rgba(15,14,12,0.15);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    margin-bottom: 64px;
+    border-bottom: 3px double var(--ink);
+    padding-bottom: 16px;
+  }
+
+  .section-number {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--red);
+  }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border: 1px solid rgba(15,14,12,0.15);
+  }
+
+  .service-card {
+    padding: 40px;
+    border-right: 1px solid rgba(15,14,12,0.15);
+    border-bottom: 1px solid rgba(15,14,12,0.15);
+    transition: background 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .service-card:hover { background: rgba(196,26,26,0.04); }
+  .service-card:nth-child(2n) { border-right: none; }
+  .service-card:nth-child(3), .service-card:nth-child(4) { border-bottom: none; }
+
+  .service-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--red);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .service-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 16px;
+    letter-spacing: -0.01em;
+  }
+
+  .service-desc {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: var(--grey);
+    font-weight: 300;
+    margin-bottom: 24px;
+  }
+
+  .service-features {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .service-features li {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--grey);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .service-features li::before {
+    content: '—';
+    color: var(--red);
+    flex-shrink: 0;
+  }
+
+  /* ── METHODOLOGY ── */
+  .methodology {
+    padding: 96px 48px;
+    background: var(--ink);
+    color: var(--paper);
+    border-bottom: 3px solid var(--red);
+  }
+
+  .methodology .section-title { color: var(--paper); }
+  .methodology .section-number { color: var(--red); }
+  .methodology .section-header { border-color: rgba(245,240,232,0.2); }
+
+  .pipeline {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    border: 1px solid rgba(245,240,232,0.1);
+  }
+
+  .pipeline-step {
+    padding: 32px 24px;
+    border-right: 1px solid rgba(245,240,232,0.1);
+    position: relative;
+  }
+  .pipeline-step:last-child { border-right: none; }
+
+  .pipeline-step::after {
+    content: '→';
+    position: absolute;
+    right: -14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--red);
+    font-size: 16px;
+    z-index: 1;
+  }
+  .pipeline-step:last-child::after { display: none; }
+
+  .step-n {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 32px;
+    font-weight: 300;
+    color: rgba(245,240,232,0.15);
+    line-height: 1;
+    margin-bottom: 12px;
+  }
+
+  .step-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--paper);
+    margin-bottom: 10px;
+    line-height: 1.2;
+  }
+
+  .step-desc {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    line-height: 1.6;
+    color: rgba(245,240,232,0.45);
+  }
+
+  .principles {
+    margin-top: 64px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+  }
+
+  .principle {
+    padding: 24px;
+    border: 1px solid rgba(245,240,232,0.1);
+    border-top: 2px solid var(--red);
+  }
+
+  .principle-title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--paper);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  .principle-text {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 14px;
+    line-height: 1.6;
+    color: rgba(245,240,232,0.55);
+    font-weight: 300;
+  }
+
+  /* ── SAMPLE REPORT ── */
+  .sample {
+    padding: 96px 48px;
+    border-bottom: 1px solid rgba(15,14,12,0.15);
+  }
+
+  .report-preview {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 64px;
+    align-items: start;
+  }
+
+  .report-doc {
+    background: #fff;
+    border: 1px solid rgba(15,14,12,0.15);
+    box-shadow: 8px 8px 0 rgba(15,14,12,0.08);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .report-header {
+    background: var(--ink);
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .report-header-brand {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--paper);
+  }
+
+  .report-header-meta {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--grey-light);
+  }
+
+  .report-body { padding: 24px; }
+
+  .report-classification {
+    text-align: center;
+    font-size: 9px;
+    letter-spacing: 0.3em;
+    color: var(--red);
+    border: 1px solid var(--red);
+    padding: 4px 16px;
+    display: inline-block;
+    margin-bottom: 20px;
+  }
+
+  .report-title-doc {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 4px;
+    color: var(--ink);
+  }
+
+  .report-subtitle {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--grey);
+    margin-bottom: 20px;
+  }
+
+  .report-rule { border: none; border-top: 2px solid var(--ink); margin: 16px 0; }
+
+  .report-section-label {
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    color: var(--red);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    margin-top: 16px;
+  }
+
+  .report-finding {
+    padding: 10px 12px;
+    background: var(--paper);
+    border-left: 3px solid var(--ink);
+    margin-bottom: 8px;
+  }
+
+  .report-finding-text {
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--ink);
+    margin-bottom: 6px;
+  }
+
+  .confidence-row {
+    display: flex; gap: 12px; align-items: center;
+  }
+
+  .confidence-badge {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    text-transform: uppercase;
+  }
+  .conf-high { background: #052e16; color: #86efac; }
+  .conf-med  { background: #451a03; color: #fcd34d; }
+  .conf-partial { background: #1e1b4b; color: #a5b4fc; }
+
+  .report-redacted-block {
+    background: var(--ink);
+    height: 10px;
+    border-radius: 1px;
+    margin: 4px 0;
+    width: 70%;
+  }
+
+  .report-evidence-row {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(15,14,12,0.08);
+    padding: 5px 0;
+    font-size: 9px;
+    color: var(--grey);
+  }
+
+  .report-stamp {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    border: 3px solid rgba(196,26,26,0.3);
+    padding: 6px 12px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: rgba(196,26,26,0.4);
+    transform: rotate(-8deg);
+    text-transform: uppercase;
+  }
+
+  .report-explainer {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .report-explainer h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+  }
+
+  .report-explainer p {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--grey);
+    font-weight: 300;
+  }
+
+  .diff-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .diff-list li {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    color: var(--ink);
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .diff-list li span:first-child {
+    color: var(--red);
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  /* ── AUDIENCE SPLIT ── */
+  .audiences {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 1px solid rgba(15,14,12,0.15);
+  }
+
+  .audience-panel {
+    padding: 80px 48px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .audience-panel:first-child {
+    border-right: 3px solid var(--ink);
+    background: var(--paper-dark);
+  }
+
+  .audience-panel:last-child {
+    background: var(--paper);
+  }
+
+  .audience-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--red);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    display: block;
+  }
+
+  .audience-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin-bottom: 24px;
+  }
+
+  .audience-body {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--grey);
+    font-weight: 300;
+    margin-bottom: 32px;
+  }
+
+  .use-case-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 40px;
+  }
+
+  .use-case-list li {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    padding: 8px 12px;
+    border-left: 2px solid var(--grey-light);
+    background: rgba(15,14,12,0.03);
+  }
+
+  /* ── CONTACT / CTA ── */
+  .cta-section {
+    padding: 96px 48px;
+    background: var(--ink);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-section::before {
+    content: 'SIGNAL DESK';
+    position: absolute;
+    font-family: 'Playfair Display', serif;
+    font-size: 200px;
+    font-weight: 900;
+    color: rgba(245,240,232,0.03);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .cta-kicker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--red);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+
+  .cta-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(36px, 5vw, 60px);
+    font-weight: 900;
+    color: var(--paper);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin-bottom: 24px;
+  }
+
+  .cta-sub {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 18px;
+    font-weight: 300;
+    line-height: 1.6;
+    color: rgba(245,240,232,0.5);
+    max-width: 560px;
+    margin: 0 auto 48px;
+  }
+
+  .cta-actions {
+    display: flex; gap: 16px; justify-content: center; align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 64px;
+  }
+
+  .btn-white {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--paper);
+    color: var(--ink);
+    border: 2px solid var(--paper);
+    padding: 14px 32px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.2s;
+  }
+  .btn-white:hover { background: var(--red); border-color: var(--red); color: #fff; }
+
+  .btn-outline-white {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: transparent;
+    color: rgba(245,240,232,0.7);
+    border: 2px solid rgba(245,240,232,0.25);
+    padding: 14px 32px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.2s;
+  }
+  .btn-outline-white:hover { border-color: var(--paper); color: var(--paper); }
+
+  .cta-fine-print {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: rgba(245,240,232,0.2);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.8;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--ink);
+    border-top: 3px double rgba(245,240,232,0.1);
+    padding: 32px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-brand {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    color: rgba(245,240,232,0.4);
+  }
+
+  .footer-links {
+    display: flex; gap: 24px; list-style: none;
+  }
+
+  .footer-links a {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: rgba(245,240,232,0.3);
+    text-decoration: none;
+    text-transform: uppercase;
+  }
+  .footer-links a:hover { color: rgba(245,240,232,0.7); }
+
+  .footer-legal {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: rgba(245,240,232,0.2);
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    nav { padding: 0 24px; }
+    .nav-links { display: none; }
+    .hero-main { grid-template-columns: 1fr; }
+    .hero-right { border-top: 1px solid rgba(15,14,12,0.2); display: grid; grid-template-columns: repeat(3,1fr); }
+    .hero-left { padding: 40px 24px; }
+    .hero-dateline { padding: 16px 24px; }
+    .services { padding: 64px 24px; }
+    .services-grid { grid-template-columns: 1fr; }
+    .service-card:nth-child(2n) { border-right: 1px solid rgba(15,14,12,0.15); }
+    .service-card:nth-child(3) { border-bottom: 1px solid rgba(15,14,12,0.15); }
+    .methodology { padding: 64px 24px; }
+    .pipeline { grid-template-columns: 1fr; }
+    .pipeline-step::after { display: none; }
+    .principles { grid-template-columns: 1fr; }
+    .sample { padding: 64px 24px; }
+    .report-preview { grid-template-columns: 1fr; }
+    .audiences { grid-template-columns: 1fr; }
+    .audience-panel:first-child { border-right: none; border-bottom: 3px solid var(--ink); }
+    .cta-section { padding: 64px 24px; }
+    footer { flex-direction: column; gap: 16px; text-align: center; padding: 24px; }
+    .footer-links { flex-wrap: wrap; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-brand">
+    <div class="nav-dot"></div>
+    SIGNAL DESK
+  </a>
+  <ul class="nav-links">
+    <li><a href="#services">Services</a></li>
+    <li><a href="#methodology">Methodology</a></li>
+    <li><a href="#sample">Sample</a></li>
+    <li><a href="#for-who">For Who</a></li>
+  </ul>
+  <a href="#contact" class="nav-cta">Submit a Brief</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-dateline fade-up">
+    <span>
+      <span>SIGNAL DESK · EST. 2025</span>
+      <span>NORTHAMPTONSHIRE, UK</span>
+    </span>
+    <span>LAWFUL · EVIDENCE-BACKED · AUDITABLE</span>
+  </div>
+
+  <div class="hero-main">
+    <div class="hero-left">
+      <div class="hero-kicker">Public-Source Intelligence Agency</div>
+      <h1 class="fade-up-1">
+        Every<br>claim.<br><em>Proved.</em>
+      </h1>
+      <p class="hero-deck fade-up-2">
+        Signal Desk produces lawful, evidence-backed research reports using only public and properly licensed sources — with preserved proof, clear confidence ratings, and mandatory human review before delivery.
+      </p>
+      <div class="hero-actions fade-up-3">
+        <a href="#contact" class="btn-primary">Submit a Brief</a>
+        <a href="#sample" class="btn-secondary">View Sample Report</a>
+      </div>
+    </div>
+
+    <div class="hero-right fade-up-2">
+      <div class="stat-block">
+        <div class="stat-number">10<sup>+</sup></div>
+        <div class="stat-label">Pipeline stages per case</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-number">13</div>
+        <div class="stat-label">Mandatory review gates</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-number">0</div>
+        <div class="stat-label">Reports published without human sign-off</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-number">100<sup>%</sup></div>
+        <div class="stat-label">Claims linked to preserved evidence</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <span class="red">SIGNAL DESK</span>
+    <span>Lawful sources only &nbsp;·</span>
+    <span>Every claim linked to evidence &nbsp;·</span>
+    <span>Human approval required &nbsp;·</span>
+    <span>Preservation before analysis &nbsp;·</span>
+    <span>Facts and inferences always separated &nbsp;·</span>
+    <span>No autonomous publication &nbsp;·</span>
+    <span class="red">SIGNAL DESK</span>
+    <span>Corporate due diligence &nbsp;·</span>
+    <span>Sanctions mapping &nbsp;·</span>
+    <span>Narrative monitoring &nbsp;·</span>
+    <span>Journalist research support &nbsp;·</span>
+    <span>Public-interest investigations &nbsp;·</span>
+    <span>Lawful sources only &nbsp;·</span>
+    <span>Every claim linked to evidence &nbsp;·</span>
+    <span>Human approval required &nbsp;·</span>
+    <span>Preservation before analysis &nbsp;·</span>
+    <span>Facts and inferences always separated &nbsp;·</span>
+    <span>No autonomous publication &nbsp;·</span>
+    <span class="red">SIGNAL DESK</span>
+    <span>Corporate due diligence &nbsp;·</span>
+    <span>Sanctions mapping &nbsp;·</span>
+    <span>Narrative monitoring &nbsp;·</span>
+    <span>Journalist research support &nbsp;·</span>
+    <span>Public-interest investigations &nbsp;·</span>
+  </div>
+</div>
+
+<!-- SERVICES -->
+<section class="services" id="services">
+  <div class="section-header">
+    <span class="section-number">01 /</span>
+    <h2 class="section-title">What We Investigate</h2>
+  </div>
+
+  <div class="services-grid">
+    <div class="service-card">
+      <span class="service-tag">B2B · Compliance</span>
+      <h3 class="service-name">Corporate Due Diligence & Ownership Mapping</h3>
+      <p class="service-desc">Trace beneficial ownership, sanctions exposure, and adverse media for companies and their principals — with preserved evidence and confidence ratings your compliance team can show a regulator.</p>
+      <ul class="service-features">
+        <li>Beneficial ownership and PSC mapping</li>
+        <li>OFAC, EU, OFSI, UN sanctions screening</li>
+        <li>PEP identification and risk flagging</li>
+        <li>Adverse media and litigation search</li>
+        <li>Web, domain, and infrastructure footprint</li>
+      </ul>
+    </div>
+
+    <div class="service-card">
+      <span class="service-tag">B2B · Risk</span>
+      <h3 class="service-name">Sanctions & Exposure Mapping</h3>
+      <p class="service-desc">Map complex corporate structures to identify hidden sanctions exposure, state-connected ownership, or politically exposed persons across multi-jurisdictional entity webs.</p>
+      <ul class="service-features">
+        <li>Multi-layer corporate chain analysis</li>
+        <li>Cross-jurisdictional registry research</li>
+        <li>State ownership and PEP connection mapping</li>
+        <li>Conflict-of-interest identification</li>
+        <li>Full evidence index and confidence scoring</li>
+      </ul>
+    </div>
+
+    <div class="service-card">
+      <span class="service-tag">Journalism · Media</span>
+      <h3 class="service-name">Journalist & Newsroom Research Desk</h3>
+      <p class="service-desc">Fast, rigorous public-source research for journalists and editorial teams. Corporate structures, public records, source mapping — all preserved and confidence-rated before it reaches your desk.</p>
+      <ul class="service-features">
+        <li>Company and ownership structure research</li>
+        <li>Public record and asset declaration review</li>
+        <li>Geospatial and satellite evidence</li>
+        <li>Social media and narrative mapping</li>
+        <li>Right-of-reply flagging on all findings</li>
+      </ul>
+    </div>
+
+    <div class="service-card">
+      <span class="service-tag">Ongoing · Monitoring</span>
+      <h3 class="service-name">Brand & Narrative Monitoring</h3>
+      <p class="service-desc">Continuous monitoring of public narratives around your brand, leadership, or subjects of interest — with structured alerts, preserved snapshots, and weekly digests.</p>
+      <ul class="service-features">
+        <li>Scheduled public web and media monitoring</li>
+        <li>Narrative shift and emerging story alerts</li>
+        <li>Social media public channel tracking</li>
+        <li>Preserved evidence for all flagged items</li>
+        <li>Weekly structured intelligence digest</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- METHODOLOGY -->
+<section class="methodology" id="methodology">
+  <div class="section-header">
+    <span class="section-number">02 /</span>
+    <h2 class="section-title">How Every Case Works</h2>
+  </div>
+
+  <div class="pipeline">
+    <div class="pipeline-step">
+      <div class="step-n">01</div>
+      <div class="step-name">Intake & Scoping</div>
+      <div class="step-desc">No collection until the question, geography, risk level, and evidence threshold are defined.</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">02</div>
+      <div class="step-name">Collection</div>
+      <div class="step-desc">Specialist agents collect from approved public sources only. Every tool is logged.</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">03</div>
+      <div class="step-name">Preservation</div>
+      <div class="step-desc">All evidence is archived before analysis begins. Timestamps, hashes, provenance.</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">04</div>
+      <div class="step-name">Verification</div>
+      <div class="step-desc">Every claim assessed against evidence. Confidence bands assigned. Gaps flagged.</div>
+    </div>
+    <div class="pipeline-step">
+      <div class="step-n">05</div>
+      <div class="step-name">Human Gate</div>
+      <div class="step-desc">QA, legal review, then mandatory human sign-off. Nothing ships without approval.</div>
+    </div>
+  </div>
+
+  <div class="principles">
+    <div class="principle">
+      <div class="principle-title">Evidence before assertion</div>
+      <div class="principle-text">We never claim more than the evidence supports. Every major finding carries a confidence band and a preserved source link.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Facts vs inferences, always separated</div>
+      <div class="principle-text">Confirmed facts and supported inferences are always labelled differently. Clients know exactly what is proven and what is inferred.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-title">Lawful means only</div>
+      <div class="principle-text">Public records, licensed databases, open web. No hacking. No social engineering. No private account access. Ever.</div>
+    </div>
+  </div>
+</section>
+
+<!-- SAMPLE REPORT -->
+<section class="sample" id="sample">
+  <div class="section-header">
+    <span class="section-number">03 /</span>
+    <h2 class="section-title">What a Signal Desk Report Looks Like</h2>
+  </div>
+
+  <div class="report-preview">
+    <div class="report-doc">
+      <div class="report-header">
+        <div class="report-header-brand">SIGNAL DESK · RESEARCH DOSSIER</div>
+        <div class="report-header-meta">CASE-2025-0021 · 31 MAR 2026</div>
+      </div>
+      <div class="report-body">
+        <div class="report-classification">JOURNALIST SUPPORT · PUBLIC INTEREST</div>
+
+        <div class="report-title-doc">Operation Bigaud — Offshore Structure Analysis</div>
+        <div class="report-subtitle">SUBJECT: Andrej Babiš · Chateau Bigaud, Mougins, France · $22M acquisition</div>
+        <hr class="report-rule">
+
+        <div class="report-section-label">Executive Summary</div>
+        <p style="font-size:10px; line-height:1.6; color:#333; margin-bottom:12px;">
+          Between 2009–2018, a multi-jurisdictional shell company structure routed $22M through BVI, Washington D.C., and Monaco entities to acquire Chateau Bigaud — none of which appeared in mandatory Czech political asset declarations.
+        </p>
+
+        <div class="report-section-label">Key Findings</div>
+
+        <div class="report-finding">
+          <div class="report-finding-text">Blakey Finance Ltd (BVI) established via Alcogal Panama. $22M injected July 2009. Funds routed through Washington D.C. entity to Monaco SCI SCP Bigaud as a "back-to-back loan."</div>
+          <div class="confidence-row">
+            <span class="confidence-badge conf-high">HIGH CONFIDENCE</span>
+            <span style="font-size:9px; color:#666;">EVD-001 · EVD-002 · EVD-004</span>
+          </div>
+        </div>
+
+        <div class="report-finding">
+          <div class="report-finding-text">None of the shell companies or the chateau appeared in mandatory Czech asset declarations filed post-2013.</div>
+          <div class="confidence-row">
+            <span class="confidence-badge conf-high">HIGH CONFIDENCE</span>
+            <span style="font-size:9px; color:#666;">EVD-005 · Official records</span>
+          </div>
+        </div>
+
+        <div class="report-finding">
+          <div class="report-finding-text">French OCLCIFF opened money laundering investigation Feb 2022. Status: ongoing.</div>
+          <div class="confidence-row">
+            <span class="confidence-badge conf-high">HIGH CONFIDENCE</span>
+            <span style="font-size:9px; color:#666;">EVD-003 · Le Monde / ICIJ</span>
+          </div>
+        </div>
+
+        <div class="report-finding">
+          <div class="report-finding-text">SynBiol (Agrofert) acquired Monaco entities in 2018 financial statements. Source of original $22M: <span class="redact">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></div>
+          <div class="confidence-row">
+            <span class="confidence-badge conf-partial">PARTIAL</span>
+            <span class="confidence-badge conf-med" style="margin-left:4px;">UNRESOLVED</span>
+          </div>
+        </div>
+
+        <div class="report-section-label" style="margin-top:16px;">Evidence Index (8 items preserved)</div>
+        <div class="report-evidence-row"><span>EVD-001 ICIJ Pandora Papers report</span><span style="color:#c41a1a;">archive.today ✓</span></div>
+        <div class="report-evidence-row"><span>EVD-002 ICIJ Offshore Leaks Database</span><span style="color:#c41a1a;">Wayback ✓</span></div>
+        <div class="report-evidence-row"><span>EVD-003 ICIJ / Le Monde (French probe)</span><span style="color:#c41a1a;">archive.today ✓</span></div>
+        <div class="report-evidence-row"><span>EVD-004 VSquare / Investigace.cz</span><span style="color:#c41a1a;">archive.today ✓</span></div>
+        <div class="report-evidence-row" style="border:none;"><span style="color:#888;">+ 4 further items · Full index in appendix</span><span></span></div>
+
+        <div class="report-stamp">Human Approved</div>
+      </div>
+    </div>
+
+    <div class="report-explainer">
+      <div>
+        <h3>Research that holds up under scrutiny.</h3>
+        <p>Every Signal Desk report arrives with the evidence baked in. Not a list of URLs — a structured evidence index with preserved archives, timestamps, and hash fingerprints. Your legal team can verify every claim independently.</p>
+      </div>
+      <ul class="diff-list">
+        <li><span>✦</span><span>Confidence ratings on every major finding — HIGH, MEDIUM, LOW, or UNRESOLVED</span></li>
+        <li><span>✦</span><span>Facts and inferences always clearly separated</span></li>
+        <li><span>✦</span><span>Full evidence index with archive locations</span></li>
+        <li><span>✦</span><span>Scope and limitations section in every report</span></li>
+        <li><span>✦</span><span>QA and legal review before human sign-off</span></li>
+        <li><span>✦</span><span>Subject's denial or response noted where on record</span></li>
+      </ul>
+      <a href="#contact" class="btn-primary" style="display:inline-block;">Request a Sample Report</a>
+    </div>
+  </div>
+</section>
+
+<!-- AUDIENCE SPLIT -->
+<section class="audiences" id="for-who">
+  <div class="audience-panel">
+    <span class="audience-label">For Compliance & Legal</span>
+    <h3 class="audience-title">Due diligence your regulator will actually respect.</h3>
+    <p class="audience-body">Signal Desk produces corporate research with the audit trail built in. Every finding linked to a preserved public source. Every claim confidence-rated. Every report human-reviewed. Give your AML and KYC teams something they can file.</p>
+    <ul class="use-case-list">
+      <li>Beneficial ownership verification</li>
+      <li>Sanctions and PEP screening with evidence</li>
+      <li>Adverse media with source provenance</li>
+      <li>Pre-transaction third-party due diligence</li>
+    </ul>
+    <a href="#contact" class="btn-primary">Talk to Us</a>
+  </div>
+
+  <div class="audience-panel">
+    <span class="audience-label">For Journalists & Newsrooms</span>
+    <h3 class="audience-title">A research desk that works like a Bellingcat team.</h3>
+    <p class="audience-body">Signal Desk is built on open-source investigative discipline. Corporate structures, asset declarations, company registries, public records — collected, preserved, verified, and confidence-rated so your reporters can write, not dig.</p>
+    <ul class="use-case-list">
+      <li>Corporate and ownership structure mapping</li>
+      <li>Public official asset declaration research</li>
+      <li>Narrative and social media monitoring</li>
+      <li>Evidence preservation for legal safety</li>
+    </ul>
+    <a href="#contact" class="btn-secondary">Talk to Us</a>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="contact">
+  <div class="cta-kicker">Submit a Brief · Start a Case</div>
+  <h2 class="cta-title">What do you need<br>to know?</h2>
+  <p class="cta-sub">Send us a brief — who or what you're investigating, why, and what you need the report to answer. We'll scope the case and tell you what we can deliver.</p>
+  <div class="cta-actions">
+    <a href="mailto:brief@signaldesk.co.uk" class="btn-white">Submit a Brief by Email</a>
+    <a href="https://linkedin.com/company/signal-desk" class="btn-outline-white">Find Us on LinkedIn</a>
+  </div>
+  <p class="cta-fine-print">
+    Signal Desk accepts lawful, public-interest briefs only. We do not accept requests designed to harass, stalk, doxx, or harm individuals.
+    All requests are reviewed by a human before any work begins. Pricing on application — cases from £150 for standard company checks.
+    Based in Northamptonshire, UK. Serving UK, EU, and international clients.
+  </p>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-brand">SIGNAL DESK · LAWFUL PUBLIC-SOURCE INTELLIGENCE</div>
+  <ul class="footer-links">
+    <li><a href="#services">Services</a></li>
+    <li><a href="#methodology">Methodology</a></li>
+    <li><a href="#sample">Sample Report</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ul>
+  <div class="footer-legal">© 2025 Signal Desk · Northamptonshire, UK · brief@signaldesk.co.uk</div>
+</footer>
+
+</body>
+</html>
