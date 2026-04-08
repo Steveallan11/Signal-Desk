@@ -55,6 +55,8 @@ interface CaseRecord {
   evidence: number;
   qaStatus: "PASSED" | "PENDING";
   signal: ScanSignal;
+  watchlistNames: string[];
+  watchlistKeywords: string;
 }
 
 interface AgentRecord {
@@ -89,6 +91,14 @@ interface EventRecord {
   agent: string;
   event: string;
   type: "flag" | "pass" | "info" | "sync" | "assign";
+}
+
+interface AgentPlanTemplate {
+  agentId: string;
+  title: string;
+  deliverable: string;
+  focus: string;
+  tasks: (caseRecord: CaseRecord | null) => string[];
 }
 
 const AGENT_ROSTER: AgentRecord[] = [
@@ -127,6 +137,75 @@ const PIPELINE_STAGES = [
   { id: "qa", label: "QA", owner: "QA Agent", status: "pending", note: "Fact-checking." },
   { id: "legal", label: "Legal", owner: "Legal Reviewer", status: "pending", note: "Ethics + defamation review." },
   { id: "human", label: "Human Gate", owner: "CEO / Board", status: "pending", note: "Awaiting human approval." },
+];
+
+const AGENT_PLAN_LIBRARY: AgentPlanTemplate[] = [
+  {
+    agentId: "intake",
+    title: "Intake & Scoping",
+    deliverable: "Structured case brief",
+    focus: "Clarify the central question and risk",
+    tasks: (caseRecord: CaseRecord | null) => [
+      `Summarize the signal "${caseRecord?.signal.title ?? "live signal"}" and relate it to ${caseRecord?.watchlistNames.join(", ") || "current watchlists"}.`,
+      `Define the risk level (${caseRecord?.risk}) and assign jurisdictions/keywords (${caseRecord?.watchlistKeywords}).`,
+      "Confirm lawful intent, keywords, and allowed source categories before collection starts.",
+    ],
+  },
+  {
+    agentId: "toollib",
+    title: "Tool Librarian",
+    deliverable: "Tool readiness checklist",
+    focus: "Verify necessary research tools",
+    tasks: (caseRecord: CaseRecord | null) => [
+      `Match the case type (${caseRecord?.type}) to approved tools (Companies House, OpenSanctions, Archive.today, etc.).`,
+      `Note any legal or access flags for the watchlists: ${caseRecord?.watchlistNames.join(", ") || "none"}.`,
+      "Record tool status and approvals before collection teams consume data.",
+    ],
+  },
+  {
+    agentId: "collection",
+    title: "Companies & Finance",
+    deliverable: "Ownership + sanctions evidence stack",
+    focus: "Gather registries and filings",
+    tasks: (caseRecord: CaseRecord | null) => [
+      `Collect filings and ownership chains using keywords ${caseRecord?.watchlistKeywords}.`,
+      `Cross-check OFAC/EU/UK sanctions lists for the subject ${caseRecord?.subject}.`,
+      "Flag any anomalies plus supporting URLs/documents for Preservation.",
+    ],
+  },
+  {
+    agentId: "archive",
+    title: "Archiving & Preservation",
+    deliverable: "Preserved evidence log",
+    focus: "Snapshot and hash each item",
+    tasks: () => [
+      "Archive every primary-source URL (signal, registry, news) before analysis.",
+      "Capture timestamps, hashes, and access notes for the Evidence Index.",
+      "Alert if resources are inaccessible or require special handling.",
+    ],
+  },
+  {
+    agentId: "verify",
+    title: "Verification",
+    deliverable: "Claim status + confidence",
+    focus: "Score evidence",
+    tasks: (caseRecord: CaseRecord | null) => [
+      `Review ${caseRecord?.claims ?? 0} claims, assign statuses (Confirmed, Partial, etc.) and confidence bands.`,
+      "Identify any gaps that need more collection or higher-quality sources.",
+      "Call out contradictory or unsupported narratives for Legal review.",
+    ],
+  },
+  {
+    agentId: "writer",
+    title: "Report Writer & QA",
+    deliverable: "Due Diligence Memo + QA log",
+    focus: "Rewrite verified findings",
+    tasks: (caseRecord: CaseRecord | null) => [
+      "Draft the memo's executive summary referencing the central question.",
+      `Include evidence index entries for sources from ${caseRecord?.watchlistNames.join(", ") || "this signal"}.`,
+      "Add Legal/QA comments and confidence statements before passing to Legal.",
+    ],
+  },
 ];
 
 const SOURCE_TYPES: SourceType[] = [
@@ -210,7 +289,7 @@ const derivePriority = (category: string): CasePriority => {
   return "MEDIUM";
 };
 
-const buildCasesFromSignals = (signals: ScanSignal[]): CaseRecord[] => {
+const buildCasesFromSignals = (signals: ScanSignal[], watchlists: WatchlistRecord[]): CaseRecord[] => {
   if (!signals.length) return [];
   const statuses: CaseStatus[] = [
     "SCOPED",
@@ -219,21 +298,28 @@ const buildCasesFromSignals = (signals: ScanSignal[]): CaseRecord[] => {
     "LEGAL_REVIEW",
     "PENDING_APPROVAL",
   ];
-  return signals.slice(0, 8).map((signal, index) => ({
-    id: `CASE-${signal.id.slice(-8).toUpperCase()}`,
-    title: signal.title,
-    type: (index % 3 === 0 && "DUE_DILIGENCE") || (index % 3 === 1 && "SANCTIONS_MAPPING") || "NARRATIVE_MONITORING",
-    priority: derivePriority(signal.category),
-    status: statuses[index % statuses.length],
-    subject: signal.source,
-    risk: index % 2 === 0 ? "HIGH" : "MEDIUM",
-    agent: index % 2 === 0 ? "Companies & Finance" : "Social Monitoring",
-    updated: new Date(signal.timestamp).toLocaleTimeString("en-GB", { timeZone: "UTC" }),
-    claims: 3 + index,
-    evidence: 6 + index * 2,
-    qaStatus: index % 2 === 0 ? "PASSED" : "PENDING",
-    signal,
-  }));
+  return signals.slice(0, 8).map((signal, index) => {
+    const watchlist = watchlists[index % watchlists.length];
+    const keywords = watchlist?.keywords.length ? watchlist.keywords.join(", ") : "Monitored keywords";
+    const watchlistNames = watchlist ? [watchlist.name] : [];
+    return {
+      id: `CASE-${signal.id.slice(-8).toUpperCase()}`,
+      title: signal.title,
+      type: (index % 3 === 0 && "DUE_DILIGENCE") || (index % 3 === 1 && "SANCTIONS_MAPPING") || "NARRATIVE_MONITORING",
+      priority: derivePriority(signal.category),
+      status: statuses[index % statuses.length],
+      subject: signal.source,
+      risk: index % 2 === 0 ? "HIGH" : "MEDIUM",
+      agent: index % 2 === 0 ? "Companies & Finance" : "Social Monitoring",
+      updated: new Date(signal.timestamp).toLocaleTimeString("en-GB", { timeZone: "UTC" }),
+      claims: 3 + index,
+      evidence: 6 + index * 2,
+      qaStatus: index % 2 === 0 ? "PASSED" : "PENDING",
+      signal,
+      watchlistNames,
+      watchlistKeywords: keywords,
+    };
+  });
 };
 
 const buildAlertsFromSignals = (
@@ -304,7 +390,7 @@ export default function Dashboard() {
         const payload: ScanFeedResponse = await response.json();
         if (cancelled) return;
         setScanResponse(payload);
-        const derivedCases = buildCasesFromSignals(payload.signals);
+        const derivedCases = buildCasesFromSignals(payload.signals, watchlists);
         setCases(derivedCases);
         setSelectedCaseId((prev) => prev ?? derivedCases[0]?.id ?? null);
         setAlerts(buildAlertsFromSignals(payload.signals, watchlists, derivedCases));
@@ -326,6 +412,27 @@ export default function Dashboard() {
     () => cases.find((c) => c.id === selectedCaseId) ?? cases[0] ?? null,
     [cases, selectedCaseId]
   );
+
+  const planEntries = useMemo(() => {
+    if (!selectedCase) return [];
+    return AGENT_PLAN_LIBRARY.map((template) => ({
+      ...template,
+      tasks: template.tasks(selectedCase),
+    }));
+  }, [selectedCase]);
+
+  const addPlanEvent = (agentId: string) => {
+    if (!selectedCase) return;
+    const agent = AGENT_ROSTER.find((entry) => entry.id === agentId);
+    const name = agent?.name ?? agentId;
+    const event: EventRecord = {
+      time: new Date().toLocaleTimeString("en-GB", { timeZone: "UTC" }),
+      agent: name,
+      event: `Queued ${name} for "${selectedCase.title}" investigation`,
+      type: "assign",
+    };
+    setEvents((prev) => [event, ...prev].slice(0, 12));
+  };
 
   const stats = useMemo(() => {
     const pendingApprovals = cases.filter((c) => c.status === "PENDING_APPROVAL").length;
@@ -395,7 +502,7 @@ export default function Dashboard() {
       if (!response.ok) throw new Error("Refresh failed");
       const payload: ScanFeedResponse = await response.json();
       setScanResponse(payload);
-      const derivedCases = buildCasesFromSignals(payload.signals);
+      const derivedCases = buildCasesFromSignals(payload.signals, watchlists);
       setCases(derivedCases);
       setAlerts(buildAlertsFromSignals(payload.signals, watchlists, derivedCases));
       setEvents(buildEventLogFromSignals(payload.signals));
@@ -505,21 +612,55 @@ export default function Dashboard() {
   const renderCaseDetail = () => {
     if (!selectedCase) return <p className="case-detail__empty">No live case selected yet.</p>;
     return (
-      <div className="case-detail__body">
-        <div>
-          <p className="case-detail__subject">{selectedCase.subject}</p>
-          <p>{selectedCase.signal.summary || "Summary not available yet."}</p>
-          <p className="case-detail__meta">
-            Signal captured {selectedCase.signal.timestamp} | Source {selectedCase.signal.source}
-          </p>
-          <button className="approve-btn" onClick={() => setModalSignal(selectedCase.signal)}>
-            VIEW SIGNAL DETAIL
-          </button>
+      <div className="case-detail__wrapper">
+        <div className="case-detail__body">
+          <div>
+            <p className="case-detail__subject">{selectedCase.subject}</p>
+            <p>{selectedCase.signal.summary || "Summary not available yet."}</p>
+            <p className="case-detail__meta">
+              Signal captured {selectedCase.signal.timestamp} | Source {selectedCase.signal.source}
+            </p>
+            <button className="approve-btn" onClick={() => setModalSignal(selectedCase.signal)}>
+              VIEW SIGNAL DETAIL
+            </button>
+          </div>
+          <div className="case-detail__stats">
+            <span>Updated {selectedCase.updated}</span>
+            <span>QA {selectedCase.qaStatus}</span>
+            <span>Risk {selectedCase.risk}</span>
+            <span>
+              Watchlists: {selectedCase.watchlistNames.join(", ") || "–"}
+            </span>
+          </div>
         </div>
-        <div className="case-detail__stats">
-          <span>Updated {selectedCase.updated}</span>
-          <span>QA {selectedCase.qaStatus}</span>
-          <span>Risk {selectedCase.risk}</span>
+        <div className="case-plan">
+          <div className="case-plan__header">
+            <span>Investigation plan</span>
+            <span className="case-plan__badge">
+              {selectedCase.watchlistNames.length ? selectedCase.watchlistNames.join(", ") : "General monitoring"}
+            </span>
+          </div>
+          {planEntries.length ? (
+            planEntries.map((entry) => (
+              <div key={entry.agentId} className="case-plan__card">
+                <div className="case-plan__title">{entry.title}</div>
+                <p className="case-plan__deliverable">{entry.deliverable}</p>
+                <p className="case-plan__focus">{entry.focus}</p>
+                <ul className="case-plan__tasks">
+                  {entry.tasks.map((task, index) => (
+                    <li key={`${entry.agentId}-task-${index}`}>{task}</li>
+                  ))}
+                </ul>
+                <div className="case-plan__actions">
+                  <button className="plan-card__button" onClick={() => addPlanEvent(entry.agentId)}>
+                    Queue {entry.title}
+                  </button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="case-plan__empty">Select a signal to assemble agent tasks.</div>
+          )}
         </div>
       </div>
     );
