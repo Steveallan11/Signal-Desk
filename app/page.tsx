@@ -1,200 +1,449 @@
 "use client";
-import { ChangeEvent, FormEvent, useMemo, useState } from "react";
-import {
-  AGENTS,
-  APPROVALS,
-  CASES,
-  CaseRecord,
-  EVENTS,
-  RISK_COLORS,
-  REGISTRY_STATS,
-  STATUS_META,
-} from "@/data/dashboard";
-import { getTopBriefs } from "@/data/caseBriefs";
-import { CASE_RESOURCES, CaseResource, ResourceType } from "@/data/resources";
-import {
-  ROUTINE_STEPS,
-  STORY_SCORING_CHECKLIST,
-} from "@/data/feeds";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { buildScheduledRuns, getKeyDatabases } from "@/lib/feedPlanner";
-import { LIVE_SCANS, UPLOAD_LOG } from "@/data/intelligence";
+import {
+  SOURCE_REGISTRY,
+  WATCHLISTS,
+  SourceRecord,
+  WatchlistRecord,
+  SourceType,
+  ScanFrequency,
+} from "@/data/sourceRegistry";
+import type { ScanFeedResponse, ScanSignal } from "@/lib/types/scan";
 
 const tabs = [
   { id: "cases", label: "CASES" },
   { id: "agents", label: "AGENTS" },
-  { id: "registry", label: "TOOL REGISTRY" },
+  { id: "registry", label: "SOURCE REGISTRY" },
   { id: "log", label: "EVENT LOG" },
   { id: "feeds", label: "FEEDS" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
 
-const pipelineSteps: Array<{
+type CasePriority = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+type CaseType = "DUE_DILIGENCE" | "SANCTIONS_MAPPING" | "NARRATIVE_MONITORING";
+
+type CaseStatus =
+  | "INTAKE"
+  | "SCOPED"
+  | "ACTIVE"
+  | "VERIFICATION"
+  | "VERIFICATION_COMPLETE"
+  | "DRAFT_COMPLETE"
+  | "QA_REVISION"
+  | "QA_PASSED"
+  | "LEGAL_REVIEW"
+  | "LEGAL_BLOCKED"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "DELIVERED"
+  | "PAUSED";
+
+interface CaseRecord {
   id: string;
-  label: string;
-}> = [
-  { id: "SCOPED", label: "Scoped" },
-  { id: "ACTIVE", label: "Active" },
-  { id: "VERIFICATION", label: "Verifying" },
-  { id: "QA_PASSED", label: "QA Passed" },
-  { id: "LEGAL_REVIEW", label: "Legal Review" },
-  { id: "PENDING_APPROVAL", label: "Awaiting Approval" },
-  { id: "DELIVERED", label: "Delivered" },
+  title: string;
+  type: CaseType;
+  priority: CasePriority;
+  status: CaseStatus;
+  subject: string;
+  risk: CasePriority;
+  agent: string;
+  updated: string;
+  claims: number;
+  evidence: number;
+  qaStatus: "PASSED" | "PENDING";
+  signal: ScanSignal;
+}
+
+interface AgentRecord {
+  id: string;
+  name: string;
+  role: string;
+  status: "ACTIVE" | "IDLE";
+  lastBeat: string;
+  activeCases: number;
+  tasksToday: number;
+}
+
+type AlertStatus = "NEW" | "ESCALATED" | "PRESERVED" | "DISMISSED";
+
+interface AlertRecord {
+  id: string;
+  signalId: string;
+  sourceId: string;
+  sourceName: string;
+  watchlistId: string;
+  matchedTerm: string;
+  excerpt: string;
+  timestamp: string;
+  relevance: number;
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  caseId?: string;
+  status: AlertStatus;
+}
+
+interface EventRecord {
+  time: string;
+  agent: string;
+  event: string;
+  type: "flag" | "pass" | "info" | "sync" | "assign";
+}
+
+const AGENT_ROSTER: AgentRecord[] = [
+  { id: "ceo", name: "Chief Investigator", role: "CEO", status: "ACTIVE", lastBeat: "5m ago", activeCases: 7, tasksToday: 12 },
+  { id: "intake", name: "Intake & Scoping", role: "Intake", status: "ACTIVE", lastBeat: "18m ago", activeCases: 1, tasksToday: 4 },
+  { id: "toollib", name: "Tool Librarian", role: "Registry", status: "ACTIVE", lastBeat: "33m ago", activeCases: 0, tasksToday: 3 },
+  { id: "collection", name: "Companies & Finance", role: "Collection", status: "ACTIVE", lastBeat: "12m ago", activeCases: 3, tasksToday: 8 },
+  { id: "archive", name: "Archiving & Preservation", role: "Preservation", status: "ACTIVE", lastBeat: "8m ago", activeCases: 4, tasksToday: 17 },
+  { id: "verify", name: "Verification", role: "Verification", status: "IDLE", lastBeat: "40m ago", activeCases: 1, tasksToday: 5 },
+  { id: "writer", name: "Report Writer", role: "Reporting", status: "IDLE", lastBeat: "1h ago", activeCases: 0, tasksToday: 2 },
+  { id: "qa", name: "QA Agent", role: "QA", status: "ACTIVE", lastBeat: "22m ago", activeCases: 2, tasksToday: 6 },
+  { id: "legal", name: "Legal / Ethics", role: "Legal", status: "ACTIVE", lastBeat: "35m ago", activeCases: 1, tasksToday: 3 },
 ];
+
+const STATUS_META: Record<CaseStatus, { label: string; color: string }> = {
+  INTAKE: { label: "Intake", color: "#64748b" },
+  SCOPED: { label: "Scoped", color: "#6366f1" },
+  ACTIVE: { label: "Active", color: "#3b82f6" },
+  VERIFICATION: { label: "Verifying", color: "#8b5cf6" },
+  VERIFICATION_COMPLETE: { label: "Verified", color: "#7c3aed" },
+  DRAFT_COMPLETE: { label: "Draft", color: "#f59e0b" },
+  QA_REVISION: { label: "QA Revision", color: "#ef4444" },
+  QA_PASSED: { label: "QA Passed", color: "#10b981" },
+  LEGAL_REVIEW: { label: "Legal Review", color: "#f97316" },
+  LEGAL_BLOCKED: { label: "Blocked", color: "#dc2626" },
+  PENDING_APPROVAL: { label: "Awaiting Approval", color: "#fbbf24" },
+  APPROVED: { label: "Approved", color: "#22c55e" },
+  DELIVERED: { label: "Delivered", color: "#059669" },
+  PAUSED: { label: "Paused", color: "#94a3b8" },
+};
+
+const PIPELINE_STAGES = [
+  { id: "collection", label: "Collection", owner: "Companies & Finance", status: "in-progress", note: "Signal ingestion + preservation." },
+  { id: "verification", label: "Verification", owner: "Verification", status: "pending", note: "Claims under review." },
+  { id: "report", label: "Report Writer", owner: "Report Writer", status: "pending", note: "Drafting memo." },
+  { id: "qa", label: "QA", owner: "QA Agent", status: "pending", note: "Fact-checking." },
+  { id: "legal", label: "Legal", owner: "Legal Reviewer", status: "pending", note: "Ethics + defamation review." },
+  { id: "human", label: "Human Gate", owner: "CEO / Board", status: "pending", note: "Awaiting human approval." },
+];
+
+const SOURCE_TYPES: SourceType[] = [
+  "website",
+  "forum",
+  "social_account",
+  "news_site",
+  "registry",
+  "other",
+];
+
+const SCAN_FREQUENCIES: ScanFrequency[] = ["6h", "12h", "24h", "manual"];
+
+const PRIORITY_LEVELS: SourceRecord["priority"][] = ["LOW", "MEDIUM", "HIGH"];
+
+interface SourceFormState {
+  name: string;
+  url: string;
+  type: SourceType;
+  frequency: ScanFrequency;
+  priority: SourceRecord["priority"];
+  keywords: string;
+  entities: string;
+  watchlistIds: string[];
+  riskNotes: string;
+  accessNotes: string;
+  approved: boolean;
+}
+
+interface WatchlistFormState {
+  name: string;
+  priority: WatchlistRecord["priority"];
+  subjects: string;
+  aliases: string;
+  companyNames: string;
+  directors: string;
+  domains: string;
+  keywords: string;
+  hashtags: string;
+  excludedTerms: string;
+  linkedCaseIds: string;
+}
+
+const DEFAULT_SOURCE_FORM: SourceFormState = {
+  name: "",
+  url: "",
+  type: "website",
+  frequency: "24h",
+  priority: "MEDIUM",
+  keywords: "",
+  entities: "",
+  watchlistIds: [],
+  riskNotes: "",
+  accessNotes: "",
+  approved: true,
+};
+
+const DEFAULT_WATCHLIST_FORM: WatchlistFormState = {
+  name: "",
+  priority: "MEDIUM",
+  subjects: "",
+  aliases: "",
+  companyNames: "",
+  directors: "",
+  domains: "",
+  keywords: "",
+  hashtags: "",
+  excludedTerms: "",
+  linkedCaseIds: "",
+};
+
+const parseCommaList = (input: string) =>
+  input
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+const derivePriority = (category: string): CasePriority => {
+  if (category.includes("ENFORCEMENT")) return "CRITICAL";
+  if (category.includes("INVESTIGATIVE")) return "HIGH";
+  return "MEDIUM";
+};
+
+const buildCasesFromSignals = (signals: ScanSignal[]): CaseRecord[] => {
+  if (!signals.length) return [];
+  const statuses: CaseStatus[] = [
+    "SCOPED",
+    "ACTIVE",
+    "VERIFICATION",
+    "LEGAL_REVIEW",
+    "PENDING_APPROVAL",
+  ];
+  return signals.slice(0, 8).map((signal, index) => ({
+    id: `CASE-${signal.id.slice(-8).toUpperCase()}`,
+    title: signal.title,
+    type: (index % 3 === 0 && "DUE_DILIGENCE") || (index % 3 === 1 && "SANCTIONS_MAPPING") || "NARRATIVE_MONITORING",
+    priority: derivePriority(signal.category),
+    status: statuses[index % statuses.length],
+    subject: signal.source,
+    risk: index % 2 === 0 ? "HIGH" : "MEDIUM",
+    agent: index % 2 === 0 ? "Companies & Finance" : "Social Monitoring",
+    updated: new Date(signal.timestamp).toLocaleTimeString("en-GB", { timeZone: "UTC" }),
+    claims: 3 + index,
+    evidence: 6 + index * 2,
+    qaStatus: index % 2 === 0 ? "PASSED" : "PENDING",
+    signal,
+  }));
+};
+
+const buildAlertsFromSignals = (
+  signals: ScanSignal[],
+  watchlists: WatchlistRecord[],
+  cases: CaseRecord[]
+): AlertRecord[] => {
+  if (!signals.length) return [];
+  return signals.slice(0, 6).map((signal, index) => {
+    const watchlist = watchlists[index % watchlists.length];
+    const assignedCase = cases[index % cases.length];
+    const severity = index % 2 === 0 ? "HIGH" : index % 3 === 0 ? "LOW" : "MEDIUM";
+    return {
+      id: `alert-${signal.id}`,
+      signalId: signal.id,
+      sourceId: signal.sourceId,
+      sourceName: signal.source,
+      watchlistId: watchlist?.id ?? "",
+      matchedTerm: signal.category,
+      excerpt: signal.summary || signal.title,
+      timestamp: new Date(signal.timestamp).toLocaleTimeString("en-GB", { timeZone: "UTC" }),
+      relevance: 6 + (index % 4),
+      severity,
+      caseId: assignedCase?.id,
+      status: "NEW",
+    };
+  });
+};
+
+const buildEventLogFromSignals = (signals: ScanSignal[]): EventRecord[] =>
+  signals.slice(0, 5).map((signal, index) => ({
+    time: new Date(signal.timestamp).toLocaleTimeString("en-GB", { timeZone: "UTC" }),
+    agent: index % 2 === 0 ? "Preservation" : "Tool Librarian",
+    event: `${signal.source} signal ingested (${signal.category})`,
+    type: index % 3 === 0 ? "sync" : index % 3 === 1 ? "info" : "flag",
+  }));
+
+const statusBadge = (status: CaseStatus) => {
+  const meta = STATUS_META[status];
+  return (
+    <span className="badge" style={{ color: meta.color, border: `1px solid ${meta.color}44` }}>
+      � {meta.label}
+    </span>
+  );
+};
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("cases");
-  const [selectedCase, setSelectedCase] = useState<CaseRecord | null>(CASES[0]);
-  const [modalResource, setModalResource] = useState<CaseResource | null>(null);
-  const [uploadLabel, setUploadLabel] = useState("Operational evidence drop");
-  const [pendingFiles, setPendingFiles] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
-  const [scanHistory, setScanHistory] = useState<string[]>([
-    "07:00 UTC · Tier 1 morning scan complete",
-    "08:14 UTC · Discord + Telegram sync",
-    "09:02 UTC · Manual signal pulse",
-  ]);
+  const [scanResponse, setScanResponse] = useState<ScanFeedResponse | null>(null);
+  const [cases, setCases] = useState<CaseRecord[]>([]);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
+  const [events, setEvents] = useState<EventRecord[]>([]);
+  const [sources, setSources] = useState<SourceRecord[]>(SOURCE_REGISTRY);
+  const [watchlists, setWatchlists] = useState<WatchlistRecord[]>(WATCHLISTS);
+  const [modalSignal, setModalSignal] = useState<ScanSignal | null>(null);
+  const [newSourceMessage, setNewSourceMessage] = useState<string | null>(null);
+  const [sourceForm, setSourceForm] = useState<SourceFormState>(() => ({ ...DEFAULT_SOURCE_FORM }));
+  const [watchlistForm, setWatchlistForm] = useState<WatchlistFormState>(() => ({ ...DEFAULT_WATCHLIST_FORM }));
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const fetchSignals = async () => {
+      try {
+        const response = await fetch("/api/scan-feed");
+        if (!response.ok) throw new Error("Signal feed not ready");
+        const payload: ScanFeedResponse = await response.json();
+        if (cancelled) return;
+        setScanResponse(payload);
+        const derivedCases = buildCasesFromSignals(payload.signals);
+        setCases(derivedCases);
+        setSelectedCaseId((prev) => prev ?? derivedCases[0]?.id ?? null);
+        setAlerts(buildAlertsFromSignals(payload.signals, watchlists, derivedCases));
+        setEvents(buildEventLogFromSignals(payload.signals));
+      } catch (error) {
+        console.error("Live scan failed", error);
+        setRefreshMessage("Live signal feed unavailable");
+      }
+    };
+    fetchSignals();
+    const interval = setInterval(fetchSignals, 180000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [watchlists]);
+
+  const selectedCase = useMemo(
+    () => cases.find((c) => c.id === selectedCaseId) ?? cases[0] ?? null,
+    [cases, selectedCaseId]
+  );
 
   const stats = useMemo(() => {
-    const pendingApprovals = CASES.filter(
-      (c) => c.status === "PENDING_APPROVAL"
-    ).length;
-    const activeCases = CASES.filter(
-      (c) => !["DELIVERED", "PAUSED"].includes(c.status)
-    ).length;
-    const totalEvidence = CASES.reduce((total, c) => total + c.evidence, 0);
-    return { pendingApprovals, activeCases, totalEvidence };
-  }, []);
+    const pendingApprovals = cases.filter((c) => c.status === "PENDING_APPROVAL").length;
+    const activeCases = cases.filter((c) => ["ACTIVE", "VERIFICATION"].includes(c.status)).length;
+    const totalEvidence = cases.reduce((total, caseItem) => total + caseItem.evidence, 0);
+    return {
+      pendingApprovals,
+      activeCases,
+      totalEvidence,
+      signalVolume: scanResponse?.totalSignals ?? 0,
+    };
+  }, [cases, scanResponse]);
 
-  const onlineAgents = AGENTS.filter((agent) => agent.status === "ACTIVE")
-    .length;
-  const scheduledRuns = useMemo(() => buildScheduledRuns(), []);
-  const intelResources = useMemo(
-    () =>
-      CASE_RESOURCES.filter((resource) => resource.caseId === selectedCase?.id),
-    [selectedCase]
-  );
-  const recommendedBriefs = useMemo(() => {
-    const briefs = getTopBriefs({ limit: 5, minScore: 6 });
-    if (!selectedCase) {
-      return briefs;
-    }
-    const caseSpecific = briefs.filter((brief) => brief.caseId === selectedCase.id);
-    return caseSpecific.length ? caseSpecific : briefs;
-  }, [selectedCase]);
-  const caseUploads = useMemo(
-    () =>
-      selectedCase ? UPLOAD_LOG.filter((upload) => upload.caseId === selectedCase.id) : [],
-    [selectedCase]
-  );
-
-  const renderPendingApproval = () => {
-    if (!APPROVALS.length) {
-      return null;
-    }
-    const approval = APPROVALS[0];
-    return (
-      <div className="approval-banner">
-        <div className="approval-label">
-          <span className="approval-pill">HUMAN ACTION REQUIRED</span>
-          <span className="approval-title">
-            {approval.title} — Legal status {approval.legalStatus} · Waiting{" "}
-            {approval.waitingHours}h
-          </span>
-        </div>
-        <div className="approval-actions">
-          <button className="approve-btn approve-cta">APPROVE DELIVERY</button>
-          <button className="approve-btn approve-alert">
-            REQUEST REVISION
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setPendingFiles(event.target.files?.length ?? 0);
-  };
-
-  const handleUploadSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSourceSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const fileInput = form.querySelector(
-      'input[name="evidenceFiles"]'
-    ) as HTMLInputElement | null;
-    const count = fileInput?.files?.length ?? 0;
-    if (!count) {
-      setUploadStatus("Add at least one file before pushing to the locker.");
+    if (!sourceForm.name.trim() || !sourceForm.url.trim()) {
+      setNewSourceMessage("Name and URL required.");
       return;
     }
-    setUploadStatus(
-      `Queued ${count} file${count === 1 ? "" : "s"} for ingestion on ${
-        selectedCase?.id || "the workspace"
-      }.`
-    );
-    setPendingFiles(0);
-    if (fileInput) {
-      fileInput.value = "";
-    }
-    form.reset();
+    const record: SourceRecord = {
+      id: `src-${Date.now()}`,
+      name: sourceForm.name.trim(),
+      url: sourceForm.url.trim(),
+      type: sourceForm.type,
+      watchlistIds: [...sourceForm.watchlistIds],
+      keywords: parseCommaList(sourceForm.keywords),
+      entities: parseCommaList(sourceForm.entities),
+      frequency: sourceForm.frequency,
+      priority: sourceForm.priority,
+      status: "ACTIVE",
+      approved: sourceForm.approved,
+      riskNotes: sourceForm.riskNotes.trim(),
+      accessNotes: sourceForm.accessNotes.trim(),
+      lastScanned: "pending",
+    };
+    setSources((prev) => [record, ...prev]);
+    setSourceForm({ ...DEFAULT_SOURCE_FORM });
+    setNewSourceMessage("Source registered. Live scan will include it shortly.");
+    setTimeout(() => setNewSourceMessage(null), 3500);
   };
 
-  const handleForceScan = (sourceName: string) => {
-    const now = new Date();
-    const timestamp = `${now
-      .getUTCHours()
-      .toString()
-      .padStart(2, "0")}:${now.getUTCMinutes().toString().padStart(2, "0")} UTC`;
-    setScanHistory((prev) =>
-      [`${timestamp} · ${sourceName} force-run requested`, ...prev].slice(0, 4)
+  const handleWatchlistSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!watchlistForm.name.trim()) return;
+    const record: WatchlistRecord = {
+      id: `wl-${Date.now()}`,
+      name: watchlistForm.name.trim(),
+      priority: watchlistForm.priority,
+      subjects: parseCommaList(watchlistForm.subjects),
+      aliases: parseCommaList(watchlistForm.aliases),
+      companyNames: parseCommaList(watchlistForm.companyNames),
+      directors: parseCommaList(watchlistForm.directors),
+      domains: parseCommaList(watchlistForm.domains),
+      keywords: parseCommaList(watchlistForm.keywords),
+      hashtags: parseCommaList(watchlistForm.hashtags),
+      excludedTerms: parseCommaList(watchlistForm.excludedTerms),
+      linkedCaseIds: parseCommaList(watchlistForm.linkedCaseIds),
+    };
+    setWatchlists((prev) => [record, ...prev]);
+    setWatchlistForm({ ...DEFAULT_WATCHLIST_FORM });
+  };
+
+  const refreshFeed = async () => {
+    setRefreshMessage("Refreshing live feed...");
+    try {
+      const response = await fetch("/api/scan-feed");
+      if (!response.ok) throw new Error("Refresh failed");
+      const payload: ScanFeedResponse = await response.json();
+      setScanResponse(payload);
+      const derivedCases = buildCasesFromSignals(payload.signals);
+      setCases(derivedCases);
+      setAlerts(buildAlertsFromSignals(payload.signals, watchlists, derivedCases));
+      setEvents(buildEventLogFromSignals(payload.signals));
+      setRefreshMessage("Live scan refreshed");
+    } catch (error) {
+      console.error("refresh error", error);
+      setRefreshMessage("Unable to refresh live feed");
+    }
+    setTimeout(() => setRefreshMessage(null), 2500);
+  };
+
+  const preserveAlert = (alertId: string) => {
+    setAlerts((prev) =>
+      prev.map((record) =>
+        record.id === alertId ? { ...record, status: "PRESERVED" } : record
+      )
     );
   };
 
-  const renderStatusBadge = (status: string) => {
-    const meta = STATUS_META[status as keyof typeof STATUS_META];
-    if (!meta) {
-      return null;
-    }
-    return (
-      <span
-        className="badge"
-        style={{ color: meta.color, border: `1px solid ${meta.color}44` }}
-      >
-        ◉ {meta.label}
-      </span>
+  const dismissAlert = (alertId: string) => {
+    setAlerts((prev) =>
+      prev.map((record) =>
+        record.id === alertId ? { ...record, status: "DISMISSED" } : record
+      )
     );
   };
+
+  const selectedSignal = modalSignal ?? selectedCase?.signal ?? null;
 
   const renderStatsBar = () => (
     <div className="stats-bar">
-      {[
-        {
-          label: "ACTIVE CASES",
-          value: stats.activeCases,
-          accent: "#6366f1",
-        },
-        {
-          label: "PENDING APPROVAL",
-          value: stats.pendingApprovals,
-          accent: "#eab308",
-        },
-        {
-          label: "EVIDENCE ITEMS",
-          value: stats.totalEvidence,
-          accent: "#3b82f6",
-        },
-        {
-          label: "AGENTS ONLINE",
-          value: onlineAgents,
-          accent: "#22c55e",
-        },
-        {
-          label: "TOOLS APPROVED",
-          value: REGISTRY_STATS.reduce((sum, stat) => sum + stat.approved, 0),
-          accent: "#8b5cf6",
-        },
-        { label: "LAST SYNC", value: "1h ago", accent: "#64748b" },
-      ].map((stat) => (
+      {[{
+        label: "ACTIVE CASES",
+        value: stats.activeCases,
+        accent: "#6366f1",
+      }, {
+        label: "PENDING APPROVAL",
+        value: stats.pendingApprovals,
+        accent: "#fbbf24",
+      }, {
+        label: "EVIDENCE ITEMS",
+        value: stats.totalEvidence,
+        accent: "#3b82f6",
+      }, {
+        label: "SIGNALS RECEIVED",
+        value: stats.signalVolume,
+        accent: "#22c55e",
+      }].map((stat) => (
         <div className="stat-card" key={stat.label}>
           <span className="stat-label">{stat.label}</span>
           <span className="stat-value" style={{ color: stat.accent }}>
@@ -205,449 +454,91 @@ export default function Dashboard() {
     </div>
   );
 
-  const renderTabs = () => (
-    <div className="tab-row">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          className={`tab-btn ${activeTab === tab.id ? "active" : ""}`}
-          onClick={() => setActiveTab(tab.id)}
+  const renderPendingApproval = () => {
+    const caseAwaiting = cases.find((c) => c.status === "PENDING_APPROVAL");
+    if (!caseAwaiting) return null;
+    return (
+      <div className="approval-banner">
+        <div className="approval-label">
+          <span className="approval-pill">HUMAN ACTION REQUIRED</span>
+          <span className="approval-title">
+            {caseAwaiting.title} � awaiting Legal review
+          </span>
+        </div>
+        <div className="approval-actions">
+          <button className="approve-btn approve-cta">APPROVE DELIVERY</button>
+          <button className="approve-btn approve-alert">REQUEST REVISION</button>
+        </div>
+      </div>
+    );
+  };
+
+  const casesTable = () => (
+    <div className="cases-table">
+      <div className="cases-table__head">
+        {["CASE ID", "TITLE", "TYPE", "STATUS", "PRIORITY", "AGENT", "CLAIMS", "EVIDENCE"].map((label) => (
+          <div className="cases-table__cell cases-table__cell--head" key={label}>{label}</div>
+        ))}
+      </div>
+      {cases.map((caseItem) => (
+        <div
+          key={caseItem.id}
+          className={`cases-table__row hover-row ${selectedCase?.id === caseItem.id ? "cases-table__row--active" : ""}`}
+          onClick={() => setSelectedCaseId(caseItem.id)}
         >
-          {tab.label}
-        </button>
+          <div className="cases-table__cell">{caseItem.id}</div>
+          <div className="cases-table__cell cases-table__cell--title">
+            <strong>{caseItem.title}</strong>
+            <div className="cases-table__meta">{caseItem.subject}</div>
+          </div>
+          <div className="cases-table__cell">{caseItem.type.replace("_", " ")}</div>
+          <div className="cases-table__cell">{statusBadge(caseItem.status)}</div>
+          <div className="cases-table__cell">{caseItem.priority}</div>
+          <div className="cases-table__cell">{caseItem.agent}</div>
+          <div className="cases-table__cell">{caseItem.claims}</div>
+          <div className="cases-table__cell">{caseItem.evidence}</div>
+        </div>
       ))}
     </div>
   );
 
-  const renderBriefPanel = () => {
-    if (!selectedCase || !recommendedBriefs.length) {
-      return null;
-    }
-    return (
-      <div className="briefs-panel">
-        <div className="briefs-panel__header">
-          <span>Intelligence Briefing</span>
-          <span className="briefs-panel__tag">Automated signal feed</span>
-        </div>
-        <div className="briefs-grid">
-          {recommendedBriefs.map((brief) => (
-            <div key={brief.id} className="brief-card">
-              <div className="brief-card__head">
-                <div className="brief-card__title">{brief.title}</div>
-                <span
-                  className={`brief-score ${
-                    brief.trending ? "brief-score--trend" : ""
-                  }`}
-                >
-                  {brief.score}
-                </span>
-              </div>
-              <p className="brief-card__summary">{brief.summary}</p>
-              <div className="brief-card__meta">
-                <span>Virality {brief.viralityPotential}</span>
-                {brief.trending && <span>Trending</span>}
-              </div>
-              <div className="brief-card__tags">
-                {brief.tags.map((tag) => (
-                  <span key={tag}>{tag}</span>
-                ))}
-              </div>
-              <div className="brief-card__actions">
-                <button type="button" className="approve-btn brief-card__button">
-                  QUEUE FOR COLLECTION
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderUploadPanel = () => {
-    if (!selectedCase) {
-      return null;
-    }
-    return (
-      <div className="upload-panel">
-        <div className="upload-panel__header">
-          <span>Evidence Upload & Live Ingestion</span>
-          <span className="upload-panel__meta">
-            {selectedCase.id} · {selectedCase.agent}
-          </span>
-        </div>
-        <form className="upload-form" onSubmit={handleUploadSubmit}>
-          <label className="upload-form__field">
-            <span>Batch label</span>
-            <input
-              value={uploadLabel}
-              onChange={(event) => setUploadLabel(event.target.value)}
-              placeholder="Describe this drop"
-            />
-          </label>
-          <label className="upload-drop">
-            <span>
-              {pendingFiles
-                ? `${pendingFiles} file${pendingFiles === 1 ? "" : "s"} selected`
-                : "Drop files or browse"}
-            </span>
-            <input
-              type="file"
-              name="evidenceFiles"
-              multiple
-              onChange={handleFileChange}
-            />
-          </label>
-          <div className="upload-form__actions">
-            <span className="upload-form__note">Live pipeline is ready</span>
-            <button type="submit" className="approve-btn">
-              PUSH TO LOCKER
-            </button>
-          </div>
-        </form>
-        {uploadStatus && <div className="upload-status">{uploadStatus}</div>}
-        <div className="upload-history">
-          <div className="upload-history__title">Recent ingest log</div>
-          {caseUploads.length ? (
-            <ul>
-              {caseUploads.map((upload) => (
-                <li key={upload.id}>
-                  <span className="upload-history__title">{upload.title}</span>
-                  <span>
-                    {upload.status} · {upload.timestamp}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No uploads queued for this case yet.</p>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderLiveScanPanel = () => {
-    if (!selectedCase) {
-      return null;
-    }
-    const statusColors: Record<
-      (typeof LIVE_SCANS)[number]["status"],
-      string
-    > = {
-      RUNNING: "#22c55e",
-      COMPLETE: "#6366f1",
-      QUEUED: "#fbbf24",
-    };
-    return (
-      <div className="live-scan-panel">
-        <div className="live-scan-panel__header">
-          <span>Live feed ingestion</span>
-          <button
-            type="button"
-            className="approve-btn live-scan-panel__cta"
-            onClick={() => handleForceScan("Signal Desk flywheel")}
-          >
-            FORCE SWEEP
-          </button>
-        </div>
-        <div className="live-scan-grid">
-          {LIVE_SCANS.map((scan) => (
-            <div key={scan.id} className="live-scan-row">
-              <div className="live-scan-row__title">
-                <span>{scan.source.name}</span>
-                <span className="live-scan-row__tier">Tier {scan.source.tier}</span>
-              </div>
-              <div className="live-scan-row__status-line">
-                <span
-                  className="live-scan-status"
-                  style={{ color: statusColors[scan.status] }}
-                >
-                  {scan.status}
-                </span>
-                <span className="live-scan-row__meta">
-                  Last {scan.lastChecked} · Next {scan.nextRun}
-                </span>
-              </div>
-              <div className="scan-progress">
-                <div
-                  className="scan-progress__bar"
-                  style={{ width: `${Math.round(scan.confidence * 100)}%` }}
-                />
-              </div>
-              <p className="live-scan-row__notes">{scan.notes}</p>
-              <button
-                type="button"
-                className="approve-btn live-scan-row__btn"
-                onClick={() => handleForceScan(scan.source.name)}
-              >
-                FORCE UPDATE
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="scan-history">
-          <div className="scan-history__title">Manual scan log</div>
-          <div className="scan-history__entries">
-            {scanHistory.map((entry, index) => (
-              <span key={`${entry}-${index}`}>{entry}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const resourceTypeColors: Record<ResourceType, string> = {
-    VIDEO: "#f43f5e",
-    IMAGE: "#22d3ee",
-    DOCUMENT: "#a855f7",
-    MAP: "#14b8a6",
-    TEXT: "#f59e0b",
-  };
-
-  const renderResources = () => {
-    if (!selectedCase) return null;
-    if (!intelResources?.length) {
-      return null;
-    }
-
-    return (
-      <div className="resource-panel">
-        <div className="resource-panel__header">
-          <span>Resource Library</span>
-          <span className="resource-panel__count">
-            {intelResources.length} asset{intelResources.length > 1 ? "s" : ""}
-          </span>
-        </div>
-        <div className="resource-grid">
-          {intelResources.map((resource) => (
-            <div key={resource.id} className="resource-card">
-              <div
-                className="resource-type"
-                style={{ background: resourceTypeColors[resource.type] }}
-              >
-                <span>{resource.type}</span>
-              </div>
-              <div className="resource-card__body">
-                <div className="resource-title">{resource.title}</div>
-                <div className="resource-desc">{resource.description}</div>
-              </div>
-              <div className="resource-meta">
-                <span>{resource.source}</span>
-                <span>{resource.timestamp}</span>
-              </div>
-              <div className="resource-tags">
-                {resource.tags.map((tag) => (
-                  <span key={tag}>{tag}</span>
-                ))}
-              </div>
-          <div className="resource-actions">
-             <button type="button" onClick={() => setModalResource(resource)}>
-               Inspect
-             </button>
-          </div>
-              {resource.badge && (
-                <span className={`resource-badge resource-badge--${resource.badge.toLowerCase()}`}>
-                  {resource.badge}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   const renderCaseDetail = () => {
-    if (!selectedCase) {
-      return null;
-    }
-    const currentIndex = pipelineSteps.findIndex(
-      (step) => step.id === selectedCase.status
-    );
+    if (!selectedCase) return <p className="case-detail__empty">No live case selected yet.</p>;
     return (
-      <div className="case-detail">
-        <div className="case-detail__header">
-          <div>
-            <div className="case-id">{selectedCase.id}</div>
-            <div className="case-title">{selectedCase.title}</div>
-          </div>
-          <button onClick={() => setSelectedCase(null)} className="close-btn">
-            ×
+      <div className="case-detail__body">
+        <div>
+          <p className="case-detail__subject">{selectedCase.subject}</p>
+          <p>{selectedCase.signal.summary || "Summary not available yet."}</p>
+          <p className="case-detail__meta">
+            Signal captured {selectedCase.signal.timestamp} � Source {selectedCase.signal.source}
+          </p>
+          <button className="approve-btn" onClick={() => setModalSignal(selectedCase.signal)}>
+            VIEW SIGNAL DETAIL
           </button>
         </div>
-        <div className="case-detail__grid">
-          {[
-            ["Case Type", selectedCase.type.replace("_", " ")],
-            ["Risk Level", selectedCase.risk],
-            [
-              "Status",
-              STATUS_META[selectedCase.status]?.label || selectedCase.status,
-            ],
-            ["Assigned Agent", selectedCase.agent],
-            ["Evidence Items", selectedCase.evidence],
-            ["Claims", selectedCase.claims],
-            ["QA Status", selectedCase.qaStatus],
-            ["Last Updated", selectedCase.updated],
-          ].map(([label, value]) => (
-            <div className="case-detail__tile" key={label}>
-              <div className="case-detail__label">{label}</div>
-              <div className="case-detail__value">{value}</div>
-            </div>
-          ))}
+        <div className="case-detail__stats">
+          <span>Updated {selectedCase.updated}</span>
+          <span>QA {selectedCase.qaStatus}</span>
+          <span>Risk {selectedCase.risk}</span>
         </div>
-        <div className="case-detail__pipeline">
-          <div className="case-detail__pipeline-label">PIPELINE PROGRESS</div>
-          <div className="pipeline-line">
-            {pipelineSteps.map((step, index) => {
-              const done = index < currentIndex;
-              const current = index === currentIndex;
-              return (
-                <div className="pipeline-step" key={step.id}>
-                  <div
-                    className="pipeline-dot"
-                    style={{
-                      borderColor: done ? "#6366f1" : current ? "#eab308" : "#1e2530",
-                      backgroundColor: done
-                        ? "#6366f1"
-                        : current
-                        ? "#eab308"
-                        : "#0d1117",
-                    }}
-                  />
-                  <span
-                    className="pipeline-label"
-                    style={{ color: done ? "#6366f1" : current ? "#eab308" : "#2d3748" }}
-                  >
-                    {step.label}
-                  </span>
-                  {index < pipelineSteps.length - 1 && (
-                    <div
-                      className="pipeline-bar"
-                      style={{ backgroundColor: done ? "#6366f1" : "#1e2530" }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        {renderBriefPanel()}
-        {renderUploadPanel()}
-        {renderLiveScanPanel()}
-        {renderResources()}
       </div>
     );
   };
-
-  const renderCasesTab = () => (
-    <div>
-      <div className="cases-header">
-        <span className="cases-title">CASE PORTFOLIO — {CASES.length} CASES</span>
-        <button className="approve-btn">+ NEW CASE</button>
-      </div>
-      <div className="cases-table">
-        <div className="cases-table__head">
-          {[
-            "CASE ID",
-            "TITLE",
-            "TYPE",
-            "RISK",
-            "STATUS",
-            "EVIDENCE",
-            "CLAIMS",
-            "QA",
-            "UPDATED",
-          ].map((label) => (
-            <div key={label} className="cases-table__cell cases-table__cell--head">
-              {label}
-            </div>
-          ))}
-        </div>
-        {CASES.map((c) => (
-          <div
-            key={c.id}
-            className={`cases-table__row hover-row ${
-              selectedCase?.id === c.id ? "cases-table__row--active" : ""
-            }`}
-            onClick={() =>
-              setSelectedCase((prev) => (prev?.id === c.id ? null : c))
-            }
-          >
-            <div className="cases-table__cell">{c.id}</div>
-            <div className="cases-table__cell cases-table__cell--title">
-              {c.title}
-            </div>
-            <div className="cases-table__cell">
-              <span className="cases-table__meta">{c.type.replace("_", " ")}</span>
-            </div>
-            <div className="cases-table__cell">
-              <span
-                className="badge"
-                style={{
-                  color: RISK_COLORS[c.risk],
-                  border: `1px solid ${RISK_COLORS[c.risk]}44`,
-                  background: `${RISK_COLORS[c.risk]}22`,
-                }}
-              >
-                {c.risk}
-              </span>
-            </div>
-            <div className="cases-table__cell">{renderStatusBadge(c.status)}</div>
-            <div className="cases-table__cell cases-table__cell--center">
-              {c.evidence}
-            </div>
-            <div className="cases-table__cell cases-table__cell--center">
-              {c.claims}
-            </div>
-            <div className="cases-table__cell">{c.qaStatus}</div>
-            <div className="cases-table__cell cases-table__cell--muted">
-              {c.updated}
-            </div>
-          </div>
-        ))}
-      </div>
-      {renderCaseDetail()}
-    </div>
-  );
 
   const renderAgentsTab = () => (
     <div>
-      <div className="section-title">AGENT ROSTER — {AGENTS.length} AGENTS</div>
+      <div className="section-title">AGENT ROSTER</div>
       <div className="agents-grid">
-        {AGENTS.map((agent) => (
+        {AGENT_ROSTER.map((agent) => (
           <div key={agent.id} className="agent-card">
-            <div className="agent-card__header">
-              <div>
-                <div className="agent-card__title">{agent.name}</div>
-                <div className="agent-card__role">{agent.role.toUpperCase()}</div>
-              </div>
-              <span
-                className="badge"
-                style={{
-                  color: agent.status === "ACTIVE" ? "#86efac" : "#78716c",
-                  border: `1px solid ${
-                    agent.status === "ACTIVE" ? "#14532d" : "#292524"
-                  }`,
-                  background: agent.status === "ACTIVE" ? "#052e16" : "#1c1917",
-                }}
-              >
-                {agent.status === "ACTIVE" && <span className="pulse">• </span>}
-                {agent.status}
-              </span>
+            <div className="agent-card__head">
+              <span>{agent.name}</span>
+              <span className={`agent-card__status ${agent.status === "ACTIVE" ? "active" : "idle"}`}>{agent.status}</span>
             </div>
-            <div className="agent-card__metrics">
-              {[
-                ["LAST BEAT", agent.lastBeat],
-                ["CASES", agent.activeCases],
-                ["TASKS TODAY", agent.tasksToday],
-              ].map(([label, value]) => (
-                <div key={label} className="agent-card__metric">
-                  <div className="agent-card__metric-label">{label}</div>
-                  <div className="agent-card__metric-value">{value}</div>
-                </div>
-              ))}
+            <p className="agent-card__role">{agent.role}</p>
+            <div className="agent-card__meta">
+              <span>{agent.activeCases} cases</span>
+              <span>{agent.tasksToday} tasks today</span>
             </div>
           </div>
         ))}
@@ -655,123 +546,103 @@ export default function Dashboard() {
     </div>
   );
 
-  const renderRegistryTab = () => (
+  const renderSourceRegistryPanel = () => (
     <div>
-      <div className="section-header">
-        <span className="section-title">TOOL REGISTRY — BELLINGCAT SYNC</span>
-        <div className="section-actions">
-          <span className="section-note">Last sync: 1h ago · v2025-03-31</span>
-          <button className="approve-btn">SYNC NOW</button>
-        </div>
-      </div>
       <div className="registry-grid">
-        {REGISTRY_STATS.map((stat) => (
-          <div key={stat.category} className="registry-card">
+        {sources.map((source) => (
+          <div key={source.id} className="registry-card">
             <div className="registry-card__header">
-              <span className="registry-card__label">{stat.category}</span>
-              <span className="registry-card__total">{stat.total} tools</span>
+              <span>{source.name}</span>
+              <span className="registry-card__status">{source.status}</span>
             </div>
-            <div className="registry-card__bars">
-              <div
-                className="registry-card__approved"
-                style={{ flex: stat.approved }}
-              />
-              <div
-                className="registry-card__review"
-                style={{ flex: stat.review }}
-              />
+            <a className="registry-card__link" href={source.url} target="_blank" rel="noreferrer">
+              Open source
+            </a>
+            <div className="registry-card__meta">Last scanned {source.lastScanned}</div>
+          </div>
+        ))}
+      </div>
+      <form className="source-registry__form" onSubmit={handleSourceSubmit}>
+        <div className="source-registry__form-grid">
+          <label>
+            Name
+            <input value={sourceForm.name} onChange={(event) => setSourceForm((prev) => ({ ...prev, name: event.target.value }))} />
+          </label>
+          <label>
+            URL
+            <input value={sourceForm.url} onChange={(event) => setSourceForm((prev) => ({ ...prev, url: event.target.value }))} />
+          </label>
+        </div>
+        <button type="submit" className="approve-btn">
+          Register Source
+        </button>
+        {newSourceMessage && <p className="source-registry__message">{newSourceMessage}</p>}
+      </form>
+    </div>
+  );
+
+  const renderAlertInbox = () => {
+    if (!alerts.length) return <p className="alert-inbox__empty">No alerts yet.</p>;
+    return (
+      <div className="alert-inbox">
+        <div className="alert-inbox__header">
+          <span>Alert inbox</span>
+          <button className="approve-btn" onClick={refreshFeed}>REFRESH SIGNALS</button>
+        </div>
+        {refreshMessage && <div className="alert-inbox__note">{refreshMessage}</div>}
+        {alerts.map((alert) => (
+          <div key={alert.id} className={`alert-row alert-row--${alert.status.toLowerCase()}`}>
+            <div className="alert-row__meta">
+              <span>{alert.sourceName}</span>
+              <span>{alert.matchedTerm}</span>
+              <span>{alert.timestamp}</span>
             </div>
-            <div className="registry-card__legend">
-              <span className="legend-approved">• {stat.approved} APPROVED</span>
-              <span className="legend-review">• {stat.review} UNDER REVIEW</span>
+            <p>{alert.excerpt}</p>
+            <div className="alert-row__actions">
+              <span className="alert-row__score">Relevance {alert.relevance}</span>
+              <button className="approve-btn" onClick={() => preserveAlert(alert.id)} disabled={alert.status !== "NEW"}>
+                PRESERVE
+              </button>
+              <button className="approve-btn alert-row__button--ghost" onClick={() => dismissAlert(alert.id)}>
+                DISMISS
+              </button>
             </div>
           </div>
         ))}
       </div>
-      <div className="registry-history">
-        {[
-          {
-            version: "v2025-03-31",
-            date: "Today 13:00",
-            added: 3,
-            updated: 7,
-            deprecated: 1,
-          },
-          {
-            version: "v2025-03-30",
-            date: "Yesterday 18:00",
-            added: 0,
-            updated: 2,
-            deprecated: 0,
-          },
-          {
-            version: "v2025-03-30",
-            date: "Yesterday 06:00",
-            added: 0,
-            updated: 4,
-            deprecated: 0,
-          },
-        ].map((item, index) => (
-          <div
-            key={`${item.version}-${index}`}
-            className="history-row"
-            style={{ borderBottom: index < 2 ? "1px solid #111820" : "none" }}
-          >
-            <span className="history-version">{item.version}</span>
-            <span className="history-date">{item.date}</span>
-            <span className="history-added">+{item.added} added</span>
-            <span className="history-updated">~{item.updated} updated</span>
-            <span className="history-deprecated">-{item.deprecated} deprecated</span>
+    );
+  };
+
+  const renderPipelinePanel = () => (
+    <div className="pipeline-panel">
+      {PIPELINE_STAGES.map((stage) => (
+        <div key={stage.id} className={`pipeline-stage pipeline-stage--${stage.status}`}>
+          <div className="pipeline-stage__head">
+            <span>{stage.label}</span>
+            <span>{stage.owner}</span>
           </div>
-        ))}
-      </div>
+          <p className="pipeline-stage__note">{stage.note}</p>
+          <div className="pipeline-stage__footer">
+            <span className="pipeline-stage__status">{stage.status}</span>
+            <button className="approve-btn pipeline-stage__button">Mark complete</button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 
   const renderEventLogTab = () => (
     <div>
-      <div className="section-title">EVENT LOG — TODAY</div>
       <div className="event-log">
-        {EVENTS.map((event, index) => {
-          const typeColors: Record<typeof event.type, string> = {
-            flag: "#f97316",
-            pass: "#22c55e",
-            info: "#6366f1",
-            sync: "#8b5cf6",
-            assign: "#3b82f6",
-          };
-          return (
-            <div key={index} className="event-row">
-              <span className="event-time">{event.time}</span>
-              <div
-                className="event-marker"
-                style={{ background: typeColors[event.type] }}
-              />
-              <div>
-                <span
-                  className="event-agent"
-                  style={{ color: typeColors[event.type] }}
-                >
-                  {event.agent.toUpperCase()}
-                </span>
-                <span className="event-text">{event.event}</span>
-              </div>
+        {events.map((event, index) => (
+          <div key={`${event.time}-${index}`} className="event-row">
+            <span className="event-time">{event.time}</span>
+            <div className="event-marker" />
+            <div>
+              <span className="event-agent">{event.agent}</span>
+              <span className="event-text">{event.event}</span>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  const renderCheckList = () => (
-    <div className="checklist">
-      <div className="section-title">STORY SCORING CHECKLIST</div>
-      <div className="checklist-grid">
-        {STORY_SCORING_CHECKLIST.map((box) => (
-          <label key={box.key} className="checklist-item">
-            <input type="checkbox" disabled />
-            <span>{box.label}</span>
-          </label>
+          </div>
         ))}
       </div>
     </div>
@@ -779,9 +650,8 @@ export default function Dashboard() {
 
   const renderFeedsTab = () => (
     <div>
-      <div className="section-title">FEED SCHEDULE & SCORE GUIDANCE</div>
       <div className="feed-grid">
-        {scheduledRuns.map((run) => (
+        {buildScheduledRuns().map((run) => (
           <div key={run.window} className="feed-card">
             <div className="feed-card__header">
               <div>
@@ -790,108 +660,109 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="feed-card__body">
-              <div className="feed-card__label">Sources (excerpt)</div>
+              <div className="feed-card__label">Sources</div>
               <ul className="feed-card__list">
-                {run.sources.slice(0, 5).map((source) => (
+                {run.sources.slice(0, 4).map((source) => (
                   <li key={source.id}>{source.name}</li>
                 ))}
               </ul>
-              <div className="feed-card__label">Social</div>
               <div className="feed-card__meta">
-                Accounts: {run.social?.accounts.slice(0, 4).join(", ")}…
-              </div>
-              <div className="feed-card__meta">
-                Searches: {run.social?.searches.slice(0, 3).join(" · ")}…
+                Accounts: {(run.social?.accounts ?? []).slice(0, 3).join(", ")}...
               </div>
             </div>
           </div>
         ))}
       </div>
-      {renderCheckList()}
-      <div className="section-title">KEY DATABASES</div>
       <ul className="database-list">
-        {getKeyDatabases().map((entry) => (
-          <li key={entry}>{entry}</li>
+        {getKeyDatabases().map((db) => (
+          <li key={db}>{db}</li>
         ))}
       </ul>
-      </div>
-    );
+    </div>
+  );
 
-  const renderResourceModal = () => {
-      if (!modalResource) return null;
-      return (
-        <div className="modal-overlay" onClick={() => setModalResource(null)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div className="modal-title">{modalResource.title}</div>
-                <div className="modal-subtitle">
-                  {modalResource.type} · {modalResource.source}
-                </div>
-              </div>
-              <button className="close-btn" onClick={() => setModalResource(null)}>
-                ×
-              </button>
+  const renderModal = () => {
+    if (!selectedSignal) return null;
+    return (
+      <div className="modal-overlay" onClick={() => setModalSignal(null)}>
+        <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+          <div className="modal-header">
+            <div>
+              <div className="modal-title">{selectedSignal.title}</div>
+              <div className="modal-subtitle">{selectedSignal.source}</div>
             </div>
-            <div className="modal-body">
-              <p>{modalResource.description}</p>
-              <p className="modal-meta">
-                Recorded {modalResource.timestamp} · {modalResource.tags.join(", ")}
-              </p>
-              <a
-                href={modalResource.link}
-                target="_blank"
-                rel="noreferrer"
-                className="modal-link"
-              >
-                Open resource
-              </a>
-            </div>
+            <button className="close-btn" onClick={() => setModalSignal(null)}>�</button>
+          </div>
+          <div className="modal-body">
+            <p>{selectedSignal.summary}</p>
+            <a href={selectedSignal.link} target="_blank" rel="noreferrer" className="modal-link">
+              Open source
+            </a>
           </div>
         </div>
-      );
-    };
+      </div>
+    );
+  };
 
-    return (
+  return (
     <div className="page">
       <div className="scanline" />
       <header className="page__header">
         <div className="branding">
           <div className="indicator pulse" />
           <span className="branding__title">SIGNAL DESK</span>
-          <span className="branding__sub">|</span>
-          <span className="branding__tag">LAWFUL PUBLIC-SOURCE INTELLIGENCE</span>
+          <span className="branding__tag">LIVE PUBLIC-SOURCE INTELLIGENCE</span>
         </div>
         <div className="header__actions">
-          {stats.pendingApprovals > 0 && (
-            <div className="header__badge">
-              <div className="indicator pulse" />
-              <span>{stats.pendingApprovals} AWAITING APPROVAL</span>
-            </div>
-          )}
-          <span className="header__timestamp">31 MAR 2026 · 14:31 UTC</span>
+          {refreshMessage && <span className="header__badge">{refreshMessage}</span>}
+          <span className="header__timestamp">{new Date().toUTCString()}</span>
         </div>
       </header>
       {renderStatsBar()}
       {renderPendingApproval()}
-      {renderTabs()}
-        <main className="content">
-          {activeTab === "cases" && renderCasesTab()}
-          {activeTab === "agents" && renderAgentsTab()}
-          {activeTab === "registry" && renderRegistryTab()}
-          {activeTab === "log" && renderEventLogTab()}
-          {activeTab === "feeds" && renderFeedsTab()}
-          {renderResourceModal()}
-        </main>
+      <div className="tab-row">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={`tab-btn ${activeTab === tab.id ? "active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <main className="content">
+        {activeTab === "cases" && (
+          <div>
+            <div className="cases-header">
+              <span className="cases-title">CASE PORTFOLIO</span>
+              <span className="cases-count">{cases.length} live cases</span>
+            </div>
+            {casesTable()}
+            <div className="case-detail">{renderCaseDetail()}</div>
+          </div>
+        )}
+        {activeTab === "agents" && renderAgentsTab()}
+        {activeTab === "registry" && (
+          <div>
+            <div className="section-title">SOURCE REGISTRY</div>
+            {renderSourceRegistryPanel()}
+            <div className="section-title">ALERT INBOX</div>
+            {renderAlertInbox()}
+            <div className="section-title">PIPELINE</div>
+            {renderPipelinePanel()}
+          </div>
+        )}
+        {activeTab === "log" && renderEventLogTab()}
+        {activeTab === "feeds" && renderFeedsTab()}
+      </main>
+      {renderModal()}
       <footer className="page__footer">
         <div className="footer__info">
-          <span>LAWFUL SOURCES ONLY</span>
-          <span>EVIDENCE-BACKED CLAIMS</span>
+          <span>LAW-ABIDING SOURCES ONLY</span>
           <span>HUMAN APPROVAL REQUIRED</span>
         </div>
-        <span className="footer__brand">
-          SIGNAL DESK v0.1 · POWERED BY PAPERCLIP
-        </span>
+        <span className="footer__brand">SIGNAL DESK LIVE � v0.2</span>
       </footer>
     </div>
   );
