@@ -26,6 +26,7 @@ import {
   SourceType,
   ScanFrequency,
 } from "@/data/sourceRegistry";
+import { ALERTS, AlertRecord } from "@/data/alerts";
 
 const tabs = [
   { id: "cases", label: "CASES" },
@@ -125,6 +126,16 @@ const parseCommaList = (input: string): string[] =>
     .map((value) => value.trim())
     .filter(Boolean);
 
+interface EvidenceRecord {
+  id: string;
+  alertId: string;
+  sourceName: string;
+  caseId?: string;
+  description: string;
+  timestamp: string;
+  confidence: number;
+}
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("cases");
   const [selectedCase, setSelectedCase] = useState<CaseRecord | null>(CASES[0]);
@@ -146,6 +157,10 @@ export default function Dashboard() {
   const [watchlistForm, setWatchlistForm] = useState<WatchlistFormState>(() => ({
     ...DEFAULT_WATCHLIST_FORM,
   }));
+  const [alerts, setAlerts] = useState<AlertRecord[]>(ALERTS);
+  const [evidenceQueue, setEvidenceQueue] = useState<EvidenceRecord[]>([]);
+  const [escalations, setEscalations] = useState<string[]>([]);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   const stats = useMemo(() => {
     const pendingApprovals = CASES.filter(
@@ -727,6 +742,95 @@ export default function Dashboard() {
     );
   };
 
+  const currentTimeStamp = () => {
+    const now = new Date();
+    return `${now.getUTCHours().toString().padStart(2, "0")}:${now
+      .getUTCMinutes()
+      .toString()
+      .padStart(2, "0")} UTC`;
+  };
+
+  const getSourceName = (sourceId: string) =>
+    sources.find((source) => source.id === sourceId)?.name || "Unknown source";
+
+  const getWatchlistName = (watchlistId: string) =>
+    watchlists.find((watchlist) => watchlist.id === watchlistId)?.name || "Watchlist";
+
+  const preserveAlert = (alertId: string) => {
+    const alert = alerts.find((record) => record.id === alertId);
+    if (!alert) {
+      return;
+    }
+    setAlerts((prev) =>
+      prev.map((record) => (record.id === alertId ? { ...record, status: "PRESERVED" } : record))
+    );
+    const evidence: EvidenceRecord = {
+      id: `evidence-${Date.now()}`,
+      alertId,
+      sourceName: getSourceName(alert.sourceId),
+      caseId: alert.caseId,
+      description: alert.excerpt,
+      timestamp: new Date().toISOString(),
+      confidence: Math.min(1, alert.relevance / 10),
+    };
+    setEvidenceQueue((prev) => [evidence, ...prev]);
+    setAlertMessage(`Alert ${alert.id} preserved for ${alert.caseId || "watchlist"}.`);
+    setTimeout(() => setAlertMessage(null), 4000);
+  };
+
+  const dismissAlert = (alertId: string) => {
+    setAlerts((prev) =>
+      prev.map((record) => (record.id === alertId ? { ...record, status: "DISMISSED" } : record))
+    );
+  };
+
+  const escalateAlert = (alertId: string) => {
+    const alert = alerts.find((record) => record.id === alertId);
+    if (!alert) {
+      return;
+    }
+    setAlerts((prev) =>
+      prev.map((record) => (record.id === alertId ? { ...record, status: "ESCALATED" } : record))
+    );
+    const entry = `${currentTimeStamp()} · CEO escalated alert from ${getSourceName(
+      alert.sourceId
+    )} (relevance ${alert.relevance})`;
+    setEscalations((prev) => [entry, ...prev].slice(0, 5));
+    setScanHistory((prev) =>
+      [`${currentTimeStamp()} · Escalation triggered for ${getSourceName(alert.sourceId)}`, ...prev].slice(
+        0,
+        4
+      )
+    );
+  };
+
+  const handleManualScan = () => {
+    const activeSource = sources.find((source) => source.status === "ACTIVE") || sources[0];
+    if (!activeSource) {
+      return;
+    }
+    const manualAlert: AlertRecord = {
+      id: `alert-${Date.now()}`,
+      sourceId: activeSource.id,
+      watchlistId: activeSource.watchlistIds[0] || watchlists[0]?.id || "",
+      matchedTerm: "fresh keyword match",
+      excerpt: "Manual scan of monitored keywords returned notable mention.",
+      timestamp: currentTimeStamp(),
+      relevance: 6,
+      severity: "MEDIUM",
+      caseId: activeSource.watchlistIds[0] ? caseFromWatchlist(activeSource.watchlistIds[0]) : undefined,
+      status: "NEW",
+    };
+    setAlerts((prev) => [manualAlert, ...prev]);
+    setScanHistory((prev) =>
+      [`${currentTimeStamp()} · Manual scan kicked off for ${activeSource.name}`, ...prev].slice(0, 4)
+    );
+  };
+
+  const caseFromWatchlist = (watchlistId: string) => {
+    const watchlist = watchlists.find((record) => record.id === watchlistId);
+    return watchlist?.linkedCaseIds[0];
+  };
   const renderCasesTab = () => (
     <div>
       <div className="cases-header">
@@ -1149,6 +1253,106 @@ export default function Dashboard() {
     </>
   );
 
+  const renderAlertInbox = () => {
+    if (!alerts.length) {
+      return <p className="alert-inbox__empty">No alerts at the moment.</p>;
+    }
+    const activeAlerts = alerts.filter(
+      (alert) => alert.status === "NEW" || alert.status === "ESCALATED"
+    );
+    return (
+      <div className="alert-inbox">
+        <div className="alert-inbox__header">
+          <span>Alert inbox</span>
+          <button type="button" className="approve-btn" onClick={handleManualScan}>
+            MANUAL SCAN
+          </button>
+        </div>
+        {alertMessage && <div className="alert-inbox__note">{alertMessage}</div>}
+        <div className="alert-inbox__list">
+          {activeAlerts.map((alert) => (
+            <div key={alert.id} className={`alert-row alert-row--${alert.status.toLowerCase()}`}>
+              <div className="alert-row__meta">
+                <span className="alert-row__source">{getSourceName(alert.sourceId)}</span>
+                <span className="alert-row__watchlist">
+                  {getWatchlistName(alert.watchlistId)}
+                </span>
+                <span className="alert-row__time">{alert.timestamp}</span>
+              </div>
+              <div className="alert-row__content">
+                <strong>{alert.matchedTerm}</strong>
+                <p>{alert.excerpt}</p>
+              </div>
+              <div className="alert-row__actions">
+                <span className="alert-row__score">Relevance {alert.relevance}</span>
+                <button
+                  type="button"
+                  className="approve-btn alert-row__button"
+                  onClick={() => preserveAlert(alert.id)}
+                  disabled={alert.status === "PRESERVED"}
+                >
+                  PRESERVE
+                </button>
+                <button
+                  type="button"
+                  className="approve-btn alert-row__button alert-row__button--ghost"
+                  onClick={() => dismissAlert(alert.id)}
+                >
+                  DISMISS
+                </button>
+                {alert.relevance >= 8 && (
+                  <button
+                    type="button"
+                    className="approve-btn alert-row__button alert-row__button--ghost"
+                    onClick={() => escalateAlert(alert.id)}
+                  >
+                    ESCALATE
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderEvidencePipeline = () => (
+    <div className="evidence-pipeline">
+      {evidenceQueue.length ? (
+        evidenceQueue.map((item) => (
+          <div key={item.id} className="evidence-card">
+            <div className="evidence-card__head">
+              <span className="evidence-card__source">{item.sourceName}</span>
+              <span className="evidence-card__confidence">
+                Confidence {(item.confidence * 100).toFixed(0)}%
+              </span>
+            </div>
+            <p className="evidence-card__description">{item.description}</p>
+            <div className="evidence-card__meta">
+              <span>{item.timestamp}</span>
+              <span>Case {item.caseId || "Watchlist"}</span>
+            </div>
+          </div>
+        ))
+      ) : (
+        <p className="evidence-pipeline__empty">No evidence preserved yet.</p>
+      )}
+    </div>
+  );
+
+  const renderEscalationLog = () => (
+    <div className="escalation-log">
+      {escalations.length ? (
+        escalations.map((entry, index) => (
+          <span key={`${entry}-${index}`}>{entry}</span>
+        ))
+      ) : (
+        <p>No escalations recorded.</p>
+      )}
+    </div>
+  );
+
   const renderRegistryTab = () => (
     <div>
       <div className="section-header">
@@ -1346,6 +1550,12 @@ export default function Dashboard() {
       {renderSourceRegistryPanel()}
       <div className="section-title">SOURCE WATCHLISTS</div>
       {renderWatchlistPanel()}
+      <div className="section-title">ALERT INBOX</div>
+      {renderAlertInbox()}
+      <div className="section-title">EVIDENCE PIPELINE</div>
+      {renderEvidencePipeline()}
+      <div className="section-title">CEO ESCALATION LOG</div>
+      {renderEscalationLog()}
     </div>
   );
     };
