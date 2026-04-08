@@ -10,6 +10,7 @@ import {
   REGISTRY_STATS,
   STATUS_META,
 } from "@/data/dashboard";
+import { CASE_RESOURCES, CaseResource, ResourceType } from "@/data/resources";
 import {
   ROUTINE_STEPS,
   STORY_SCORING_CHECKLIST,
@@ -57,6 +58,11 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
   const onlineAgents = AGENTS.filter((agent) => agent.status === "ACTIVE")
     .length;
   const scheduledRuns = useMemo(() => buildScheduledRuns(), []);
+  const intelResources = useMemo(
+    () =>
+      CASE_RESOURCES.filter((resource) => resource.caseId === selectedCase?.id),
+    [selectedCase]
+  );
 
   const renderPendingApproval = () => {
     if (!APPROVALS.length) {
@@ -151,6 +157,67 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
     </div>
   );
 
+  const resourceTypeColors: Record<ResourceType, string> = {
+    VIDEO: "#f43f5e",
+    IMAGE: "#22d3ee",
+    DOCUMENT: "#a855f7",
+    MAP: "#14b8a6",
+    TEXT: "#f59e0b",
+  };
+
+  const renderResources = () => {
+    if (!selectedCase) return null;
+    if (!intelResources?.length) {
+      return null;
+    }
+
+    return (
+      <div className="resource-panel">
+        <div className="resource-panel__header">
+          <span>Resource Library</span>
+          <span className="resource-panel__count">
+            {intelResources.length} asset{intelResources.length > 1 ? "s" : ""}
+          </span>
+        </div>
+        <div className="resource-grid">
+          {intelResources.map((resource) => (
+            <div key={resource.id} className="resource-card">
+              <div
+                className="resource-type"
+                style={{ background: resourceTypeColors[resource.type] }}
+              >
+                <span>{resource.type}</span>
+              </div>
+              <div className="resource-card__body">
+                <div className="resource-title">{resource.title}</div>
+                <div className="resource-desc">{resource.description}</div>
+              </div>
+              <div className="resource-meta">
+                <span>{resource.source}</span>
+                <span>{resource.timestamp}</span>
+              </div>
+              <div className="resource-tags">
+                {resource.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+              <div className="resource-actions">
+                <a href={resource.link} target="_blank" rel="noreferrer">
+                  Open
+                </a>
+              </div>
+              {resource.badge && (
+                <span className={`resource-badge resource-badge--${resource.badge.toLowerCase()}`}>
+                  {resource.badge}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const renderCaseDetail = () => {
     if (!selectedCase) {
       return null;
@@ -225,6 +292,7 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
             })}
           </div>
         </div>
+        {renderResources()}
       </div>
     );
   };
