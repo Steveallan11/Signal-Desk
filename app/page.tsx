@@ -41,8 +41,9 @@ const pipelineSteps: Array<{
 ];
 
 export default function Dashboard() {
-const [activeTab, setActiveTab] = useState<TabId>("cases");
+  const [activeTab, setActiveTab] = useState<TabId>("cases");
   const [selectedCase, setSelectedCase] = useState<CaseRecord | null>(CASES[0]);
+  const [modalResource, setModalResource] = useState<CaseResource | null>(null);
 
   const stats = useMemo(() => {
     const pendingApprovals = CASES.filter(
@@ -201,11 +202,11 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
                   <span key={tag}>{tag}</span>
                 ))}
               </div>
-              <div className="resource-actions">
-                <a href={resource.link} target="_blank" rel="noreferrer">
-                  Open
-                </a>
-              </div>
+          <div className="resource-actions">
+             <button type="button" onClick={() => setModalResource(resource)}>
+               Inspect
+             </button>
+          </div>
               {resource.badge && (
                 <span className={`resource-badge resource-badge--${resource.badge.toLowerCase()}`}>
                   {resource.badge}
@@ -570,10 +571,45 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
           <li key={entry}>{entry}</li>
         ))}
       </ul>
-    </div>
-  );
+      </div>
+    );
 
-  return (
+    const renderResourceModal = () => {
+      if (!modalResource) return null;
+      return (
+        <div className="modal-overlay" onClick={() => setModalResource(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <div className="modal-title">{modalResource.title}</div>
+                <div className="modal-subtitle">
+                  {modalResource.type} · {modalResource.source}
+                </div>
+              </div>
+              <button className="close-btn" onClick={() => setModalResource(null)}>
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <p>{modalResource.description}</p>
+              <p className="modal-meta">
+                Recorded {modalResource.timestamp} · {modalResource.tags.join(", ")}
+              </p>
+              <a
+                href={modalResource.link}
+                target="_blank"
+                rel="noreferrer"
+                className="modal-link"
+              >
+                Open resource
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    return (
     <div className="page">
       <div className="scanline" />
       <header className="page__header">
@@ -596,13 +632,14 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
       {renderStatsBar()}
       {renderPendingApproval()}
       {renderTabs()}
-      <main className="content">
-        {activeTab === "cases" && renderCasesTab()}
-        {activeTab === "agents" && renderAgentsTab()}
-        {activeTab === "registry" && renderRegistryTab()}
-        {activeTab === "log" && renderEventLogTab()}
-        {activeTab === "feeds" && renderFeedsTab()}
-      </main>
+        <main className="content">
+          {activeTab === "cases" && renderCasesTab()}
+          {activeTab === "agents" && renderAgentsTab()}
+          {activeTab === "registry" && renderRegistryTab()}
+          {activeTab === "log" && renderEventLogTab()}
+          {activeTab === "feeds" && renderFeedsTab()}
+          {renderResourceModal()}
+        </main>
       <footer className="page__footer">
         <div className="footer__info">
           <span>LAWFUL SOURCES ONLY</span>

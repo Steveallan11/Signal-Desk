@@ -821,6 +821,68 @@ body {
   background: #ef4444;
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 5, 5, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 32px;
+}
+
+.modal-card {
+  background: #0a0c10;
+  border: 1px solid #1e2530;
+  border-radius: 12px;
+  width: min(680px, 100%);
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.modal-subtitle {
+  font-size: 11px;
+  color: #94a3b8;
+  letter-spacing: 0.15em;
+}
+
+.modal-body {
+  font-size: 12px;
+  color: #cbd5f5;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.modal-meta {
+  font-size: 10px;
+  color: #64748b;
+  margin: 8px 0;
+}
+
+.modal-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: #38bdf8;
+}
+
 .checklist {
   border: 1px solid #1e2530;
   border-radius: 6px;
