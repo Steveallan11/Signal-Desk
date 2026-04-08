@@ -9,20 +9,27 @@ const FEEDS = [
     category: 'Investigative Journalism',
   },
   {
-    id: 'occrp',
+    id: 'occrp-news',
     name: 'OCCRP News',
-    url: 'https://occrp.org/en/feed.rss',
+    url: 'https://www.occrp.org/en/news/feed',
     category: 'Investigative Journalism',
   },
   {
-    id: 'transparency',
-    name: 'Transparency International',
-    url: 'https://transparency.org/en/feed',
+    id: 'ft-global',
+    name: 'Financial Times Global',
+    url: 'https://www.ft.com/?format=rss',
     category: 'Policy & Enforcement',
   },
 ];
 
-const parser = new Parser({ timeout: 10000 });
+const parser = new Parser({
+  timeout: 10000,
+  requestOptions: {
+    headers: {
+      'User-Agent': 'SignalDeskScanner/1.0 (+https://signaldesk.co)',
+    },
+  },
+});
 
 const flattenEntries = async (): Promise<ScanSignal[]> => {
   const allSignals: ScanSignal[] = [];
