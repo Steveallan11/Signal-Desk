@@ -275,7 +275,7 @@ const statusBadge = (status: CaseStatus) => {
   const meta = STATUS_META[status];
   return (
     <span className="badge" style={{ color: meta.color, border: `1px solid ${meta.color}44` }}>
-      • {meta.label}
+      * {meta.label}
     </span>
   );
 };
@@ -462,7 +462,7 @@ export default function Dashboard() {
         <div className="approval-label">
           <span className="approval-pill">HUMAN ACTION REQUIRED</span>
           <span className="approval-title">
-            {caseAwaiting.title} — awaiting Legal review
+            {caseAwaiting.title} - awaiting Legal review
           </span>
         </div>
         <div className="approval-actions">
@@ -510,7 +510,7 @@ export default function Dashboard() {
           <p className="case-detail__subject">{selectedCase.subject}</p>
           <p>{selectedCase.signal.summary || "Summary not available yet."}</p>
           <p className="case-detail__meta">
-            Signal captured {selectedCase.signal.timestamp} · Source {selectedCase.signal.source}
+            Signal captured {selectedCase.signal.timestamp} | Source {selectedCase.signal.source}
           </p>
           <button className="approve-btn" onClick={() => setModalSignal(selectedCase.signal)}>
             VIEW SIGNAL DETAIL
@@ -691,7 +691,7 @@ export default function Dashboard() {
               <div className="modal-title">{selectedSignal.title}</div>
               <div className="modal-subtitle">{selectedSignal.source}</div>
             </div>
-            <button className="close-btn" onClick={() => setModalSignal(null)}>×</button>
+            <button className="close-btn" onClick={() => setModalSignal(null)}>X</button>
           </div>
           <div className="modal-body">
             <p>{selectedSignal.summary}</p>
@@ -762,7 +762,7 @@ export default function Dashboard() {
           <span>LAW-ABIDING SOURCES ONLY</span>
           <span>HUMAN APPROVAL REQUIRED</span>
         </div>
-        <span className="footer__brand">SIGNAL DESK LIVE · v0.2</span>
+        <span className="footer__brand">SIGNAL DESK LIVE ï¿½ v0.2</span>
       </footer>
     </div>
   );
