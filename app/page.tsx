@@ -16,21 +16,6 @@ import {
 } from "@/data/feeds";
 import { buildScheduledRuns, getKeyDatabases } from "@/lib/feedPlanner";
 
-const intelHighlights = [
-  {
-    title: "Daily Pulse",
-    detail: "Targeted signals from OFAC, DOJ, OCCRP, and Tier 1 social feeds ensure nothing critical slips by.",
-  },
-  {
-    title: "Investigative Journalism",
-    detail: "New investigative leads highlight UK corporate abuse, crypto enforcement, and offshore narratives.",
-  },
-  {
-    title: "Evidence-Led",
-    detail: "Every case seed is scored against Signal Desk’s checklist before it reaches the CEO briefing.",
-  },
-];
-
 const tabs = [
   { id: "cases", label: "CASES" },
   { id: "agents", label: "AGENTS" },
@@ -520,17 +505,6 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
     </div>
   );
 
-  const renderIntelHighlights = () => (
-    <div className="intel-highlight-grid">
-      {intelHighlights.map((item) => (
-        <div key={item.title} className="intel-highlight-card">
-          <div className="intel-highlight-title">{item.title}</div>
-          <div className="intel-highlight-detail">{item.detail}</div>
-        </div>
-      ))}
-    </div>
-  );
-
   return (
     <div className="page">
       <div className="scanline" />
@@ -551,14 +525,6 @@ const [activeTab, setActiveTab] = useState<TabId>("cases");
           <span className="header__timestamp">31 MAR 2026 · 14:31 UTC</span>
         </div>
       </header>
-      <div className="intel-tagline">
-        <div className="intel-tagline__symbol" />
-        <div>
-          <div className="intel-tagline__title">Signal Desk | Intelligence Service</div>
-          <div className="intel-tagline__subtitle">Investigative journalism, preservation, and on-demand case cues.</div>
-        </div>
-      </div>
-      {renderIntelHighlights()}
       {renderStatsBar()}
       {renderPendingApproval()}
       {renderTabs()}
