@@ -434,6 +434,8 @@ export default function Dashboard() {
     setEvents((prev) => [event, ...prev].slice(0, 12));
   };
 
+  const [caseWorkspaceTab, setCaseWorkspaceTab] = useState<"plan" | "evidence" | "agent-log" | "notes">("plan");
+
   const stats = useMemo(() => {
     const pendingApprovals = cases.filter((c) => c.status === "PENDING_APPROVAL").length;
     const activeCases = cases.filter((c) => ["ACTIVE", "VERIFICATION"].includes(c.status)).length;
@@ -609,6 +611,79 @@ export default function Dashboard() {
     </div>
   );
 
+  const renderEvidenceSection = () => {
+    if (!selectedCase) return null;
+    const relatedAlerts = alerts.filter((alert) => alert.caseId === selectedCase.id);
+    if (!relatedAlerts.length) {
+      return <p className="case-detail__empty">No preserved alerts yet.</p>;
+    }
+    return (
+      <div className="case-evidence-grid">
+        {relatedAlerts.map((alert) => (
+          <div key={alert.id} className="case-evidence-card">
+            <div className="case-evidence-card__head">
+              <span>{alert.sourceName}</span>
+              <span className="badge" style={{ borderColor: "#1e1e2f" }}>
+                {alert.severity}
+              </span>
+            </div>
+            <p className="case-evidence-card__excerpt">{alert.excerpt}</p>
+            <div className="case-evidence-card__meta">
+              <span>{alert.timestamp}</span>
+              <span>Relevance {alert.relevance}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderAgentLogSection = () => {
+    if (!events.length) {
+      return <p className="case-detail__empty">No agent activity yet.</p>;
+    }
+    const recent = events.slice(0, 5);
+    return (
+      <div className="case-agent-log">
+        {recent.map((entry, index) => (
+          <div key={`${entry.agent}-${index}`} className="case-agent-log__row">
+            <span className="case-agent-log__time">{entry.time}</span>
+            <div>
+              <strong>{entry.agent}</strong>
+              <p>{entry.event}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderNotesSection = () => (
+    <div className="case-notes">
+      <textarea className="case-notes__input" placeholder="Add prep notes or zaps for the agents..."></textarea>
+      <button className="approve-btn case-notes__button">Save note</button>
+    </div>
+  );
+
+  const renderCaseTabs = () => (
+    <div className="case-tabs">
+      {[
+        { id: "plan", label: "Plan" },
+        { id: "evidence", label: "Evidence" },
+        { id: "agent-log", label: "Agent log" },
+        { id: "notes", label: "Notes" },
+      ].map((tab) => (
+        <button
+          key={tab.id}
+          className={`case-tabs__button ${caseWorkspaceTab === tab.id ? "active" : ""}`}
+          onClick={() => setCaseWorkspaceTab(tab.id as typeof caseWorkspaceTab)}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+
   const renderCaseDetail = () => {
     if (!selectedCase) return <p className="case-detail__empty">No live case selected yet.</p>;
     return (
@@ -633,34 +708,44 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
-        <div className="case-plan">
-          <div className="case-plan__header">
-            <span>Investigation plan</span>
-            <span className="case-plan__badge">
-              {selectedCase.watchlistNames.length ? selectedCase.watchlistNames.join(", ") : "General monitoring"}
-            </span>
-          </div>
-          {planEntries.length ? (
-            planEntries.map((entry) => (
-              <div key={entry.agentId} className="case-plan__card">
-                <div className="case-plan__title">{entry.title}</div>
-                <p className="case-plan__deliverable">{entry.deliverable}</p>
-                <p className="case-plan__focus">{entry.focus}</p>
-                <ul className="case-plan__tasks">
-                  {entry.tasks.map((task, index) => (
-                    <li key={`${entry.agentId}-task-${index}`}>{task}</li>
-                  ))}
-                </ul>
-                <div className="case-plan__actions">
-                  <button className="plan-card__button" onClick={() => addPlanEvent(entry.agentId)}>
-                    Queue {entry.title}
-                  </button>
+        <div className="case-detail__tabs">
+          {renderCaseTabs()}
+          <div className="case-tabs__content">
+            {caseWorkspaceTab === "plan" && (
+              <div className="case-plan">
+                <div className="case-plan__header">
+                  <span>Investigation plan</span>
+                  <span className="case-plan__badge">
+                    {selectedCase.watchlistNames.length ? selectedCase.watchlistNames.join(", ") : "General monitoring"}
+                  </span>
                 </div>
+                {planEntries.length ? (
+                  planEntries.map((entry) => (
+                    <div key={entry.agentId} className="case-plan__card">
+                      <div className="case-plan__title">{entry.title}</div>
+                      <p className="case-plan__deliverable">{entry.deliverable}</p>
+                      <p className="case-plan__focus">{entry.focus}</p>
+                      <ul className="case-plan__tasks">
+                        {entry.tasks.map((task, index) => (
+                          <li key={`${entry.agentId}-task-${index}`}>{task}</li>
+                        ))}
+                      </ul>
+                      <div className="case-plan__actions">
+                        <button className="plan-card__button" onClick={() => addPlanEvent(entry.agentId)}>
+                          Queue {entry.title}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="case-plan__empty">Select a signal to assemble agent tasks.</div>
+                )}
               </div>
-            ))
-          ) : (
-            <div className="case-plan__empty">Select a signal to assemble agent tasks.</div>
-          )}
+            )}
+            {caseWorkspaceTab === "evidence" && renderEvidenceSection()}
+            {caseWorkspaceTab === "agent-log" && renderAgentLogSection()}
+            {caseWorkspaceTab === "notes" && renderNotesSection()}
+          </div>
         </div>
       </div>
     );
