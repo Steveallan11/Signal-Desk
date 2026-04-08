@@ -1,8 +1,10 @@
+"use client";
 import { useMemo, useState } from "react";
 import {
   AGENTS,
   APPROVALS,
   CASES,
+  CaseRecord,
   EVENTS,
   RISK_COLORS,
   REGISTRY_STATS,
@@ -38,8 +40,8 @@ const pipelineSteps: Array<{
 ];
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<TabId>("cases");
-  const [selectedCase, setSelectedCase] = useState(CASES[0]);
+const [activeTab, setActiveTab] = useState<TabId>("cases");
+  const [selectedCase, setSelectedCase] = useState<CaseRecord | null>(CASES[0]);
 
   const stats = useMemo(() => {
     const pendingApprovals = CASES.filter(
