@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useMemo, useState } from "react";
 import {
   AGENTS,
   APPROVALS,
@@ -10,12 +10,14 @@ import {
   REGISTRY_STATS,
   STATUS_META,
 } from "@/data/dashboard";
+import { getTopBriefs } from "@/data/caseBriefs";
 import { CASE_RESOURCES, CaseResource, ResourceType } from "@/data/resources";
 import {
   ROUTINE_STEPS,
   STORY_SCORING_CHECKLIST,
 } from "@/data/feeds";
 import { buildScheduledRuns, getKeyDatabases } from "@/lib/feedPlanner";
+import { LIVE_SCANS, UPLOAD_LOG } from "@/data/intelligence";
 
 const tabs = [
   { id: "cases", label: "CASES" },
@@ -44,6 +46,14 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("cases");
   const [selectedCase, setSelectedCase] = useState<CaseRecord | null>(CASES[0]);
   const [modalResource, setModalResource] = useState<CaseResource | null>(null);
+  const [uploadLabel, setUploadLabel] = useState("Operational evidence drop");
+  const [pendingFiles, setPendingFiles] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [scanHistory, setScanHistory] = useState<string[]>([
+    "07:00 UTC · Tier 1 morning scan complete",
+    "08:14 UTC · Discord + Telegram sync",
+    "09:02 UTC · Manual signal pulse",
+  ]);
 
   const stats = useMemo(() => {
     const pendingApprovals = CASES.filter(
@@ -62,6 +72,19 @@ export default function Dashboard() {
   const intelResources = useMemo(
     () =>
       CASE_RESOURCES.filter((resource) => resource.caseId === selectedCase?.id),
+    [selectedCase]
+  );
+  const recommendedBriefs = useMemo(() => {
+    const briefs = getTopBriefs({ limit: 5, minScore: 6 });
+    if (!selectedCase) {
+      return briefs;
+    }
+    const caseSpecific = briefs.filter((brief) => brief.caseId === selectedCase.id);
+    return caseSpecific.length ? caseSpecific : briefs;
+  }, [selectedCase]);
+  const caseUploads = useMemo(
+    () =>
+      selectedCase ? UPLOAD_LOG.filter((upload) => upload.caseId === selectedCase.id) : [],
     [selectedCase]
   );
 
@@ -86,6 +109,44 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+    );
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setPendingFiles(event.target.files?.length ?? 0);
+  };
+
+  const handleUploadSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fileInput = form.querySelector(
+      'input[name="evidenceFiles"]'
+    ) as HTMLInputElement | null;
+    const count = fileInput?.files?.length ?? 0;
+    if (!count) {
+      setUploadStatus("Add at least one file before pushing to the locker.");
+      return;
+    }
+    setUploadStatus(
+      `Queued ${count} file${count === 1 ? "" : "s"} for ingestion on ${
+        selectedCase?.id || "the workspace"
+      }.`
+    );
+    setPendingFiles(0);
+    if (fileInput) {
+      fileInput.value = "";
+    }
+    form.reset();
+  };
+
+  const handleForceScan = (sourceName: string) => {
+    const now = new Date();
+    const timestamp = `${now
+      .getUTCHours()
+      .toString()
+      .padStart(2, "0")}:${now.getUTCMinutes().toString().padStart(2, "0")} UTC`;
+    setScanHistory((prev) =>
+      [`${timestamp} · ${sourceName} force-run requested`, ...prev].slice(0, 4)
     );
   };
 
@@ -157,6 +218,185 @@ export default function Dashboard() {
       ))}
     </div>
   );
+
+  const renderBriefPanel = () => {
+    if (!selectedCase || !recommendedBriefs.length) {
+      return null;
+    }
+    return (
+      <div className="briefs-panel">
+        <div className="briefs-panel__header">
+          <span>Intelligence Briefing</span>
+          <span className="briefs-panel__tag">Automated signal feed</span>
+        </div>
+        <div className="briefs-grid">
+          {recommendedBriefs.map((brief) => (
+            <div key={brief.id} className="brief-card">
+              <div className="brief-card__head">
+                <div className="brief-card__title">{brief.title}</div>
+                <span
+                  className={`brief-score ${
+                    brief.trending ? "brief-score--trend" : ""
+                  }`}
+                >
+                  {brief.score}
+                </span>
+              </div>
+              <p className="brief-card__summary">{brief.summary}</p>
+              <div className="brief-card__meta">
+                <span>Virality {brief.viralityPotential}</span>
+                {brief.trending && <span>Trending</span>}
+              </div>
+              <div className="brief-card__tags">
+                {brief.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+              <div className="brief-card__actions">
+                <button type="button" className="approve-btn brief-card__button">
+                  QUEUE FOR COLLECTION
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderUploadPanel = () => {
+    if (!selectedCase) {
+      return null;
+    }
+    return (
+      <div className="upload-panel">
+        <div className="upload-panel__header">
+          <span>Evidence Upload & Live Ingestion</span>
+          <span className="upload-panel__meta">
+            {selectedCase.id} · {selectedCase.agent}
+          </span>
+        </div>
+        <form className="upload-form" onSubmit={handleUploadSubmit}>
+          <label className="upload-form__field">
+            <span>Batch label</span>
+            <input
+              value={uploadLabel}
+              onChange={(event) => setUploadLabel(event.target.value)}
+              placeholder="Describe this drop"
+            />
+          </label>
+          <label className="upload-drop">
+            <span>
+              {pendingFiles
+                ? `${pendingFiles} file${pendingFiles === 1 ? "" : "s"} selected`
+                : "Drop files or browse"}
+            </span>
+            <input
+              type="file"
+              name="evidenceFiles"
+              multiple
+              onChange={handleFileChange}
+            />
+          </label>
+          <div className="upload-form__actions">
+            <span className="upload-form__note">Live pipeline is ready</span>
+            <button type="submit" className="approve-btn">
+              PUSH TO LOCKER
+            </button>
+          </div>
+        </form>
+        {uploadStatus && <div className="upload-status">{uploadStatus}</div>}
+        <div className="upload-history">
+          <div className="upload-history__title">Recent ingest log</div>
+          {caseUploads.length ? (
+            <ul>
+              {caseUploads.map((upload) => (
+                <li key={upload.id}>
+                  <span className="upload-history__title">{upload.title}</span>
+                  <span>
+                    {upload.status} · {upload.timestamp}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No uploads queued for this case yet.</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderLiveScanPanel = () => {
+    if (!selectedCase) {
+      return null;
+    }
+    const statusColors: Record<
+      (typeof LIVE_SCANS)[number]["status"],
+      string
+    > = {
+      RUNNING: "#22c55e",
+      COMPLETE: "#6366f1",
+      QUEUED: "#fbbf24",
+    };
+    return (
+      <div className="live-scan-panel">
+        <div className="live-scan-panel__header">
+          <span>Live feed ingestion</span>
+          <button
+            type="button"
+            className="approve-btn live-scan-panel__cta"
+            onClick={() => handleForceScan("Signal Desk flywheel")}
+          >
+            FORCE SWEEP
+          </button>
+        </div>
+        <div className="live-scan-grid">
+          {LIVE_SCANS.map((scan) => (
+            <div key={scan.id} className="live-scan-row">
+              <div className="live-scan-row__title">
+                <span>{scan.source.name}</span>
+                <span className="live-scan-row__tier">Tier {scan.source.tier}</span>
+              </div>
+              <div className="live-scan-row__status-line">
+                <span
+                  className="live-scan-status"
+                  style={{ color: statusColors[scan.status] }}
+                >
+                  {scan.status}
+                </span>
+                <span className="live-scan-row__meta">
+                  Last {scan.lastChecked} · Next {scan.nextRun}
+                </span>
+              </div>
+              <div className="scan-progress">
+                <div
+                  className="scan-progress__bar"
+                  style={{ width: `${Math.round(scan.confidence * 100)}%` }}
+                />
+              </div>
+              <p className="live-scan-row__notes">{scan.notes}</p>
+              <button
+                type="button"
+                className="approve-btn live-scan-row__btn"
+                onClick={() => handleForceScan(scan.source.name)}
+              >
+                FORCE UPDATE
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="scan-history">
+          <div className="scan-history__title">Manual scan log</div>
+          <div className="scan-history__entries">
+            {scanHistory.map((entry, index) => (
+              <span key={`${entry}-${index}`}>{entry}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const resourceTypeColors: Record<ResourceType, string> = {
     VIDEO: "#f43f5e",
@@ -293,6 +533,9 @@ export default function Dashboard() {
             })}
           </div>
         </div>
+        {renderBriefPanel()}
+        {renderUploadPanel()}
+        {renderLiveScanPanel()}
         {renderResources()}
       </div>
     );
@@ -574,7 +817,7 @@ export default function Dashboard() {
       </div>
     );
 
-    const renderResourceModal = () => {
+  const renderResourceModal = () => {
       if (!modalResource) return null;
       return (
         <div className="modal-overlay" onClick={() => setModalResource(null)}>
