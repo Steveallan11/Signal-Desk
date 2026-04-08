@@ -682,20 +682,20 @@ export default function Dashboard() {
   );
 
   const renderModal = () => {
-    if (!selectedSignal) return null;
+    if (!modalSignal) return null;
     return (
       <div className="modal-overlay" onClick={() => setModalSignal(null)}>
         <div className="modal-card" onClick={(event) => event.stopPropagation()}>
           <div className="modal-header">
             <div>
-              <div className="modal-title">{selectedSignal.title}</div>
-              <div className="modal-subtitle">{selectedSignal.source}</div>
+              <div className="modal-title">{modalSignal.title}</div>
+              <div className="modal-subtitle">{modalSignal.source}</div>
             </div>
             <button className="close-btn" onClick={() => setModalSignal(null)}>X</button>
           </div>
           <div className="modal-body">
-            <p>{selectedSignal.summary}</p>
-            <a href={selectedSignal.link} target="_blank" rel="noreferrer" className="modal-link">
+            <p>{modalSignal.summary}</p>
+            <a href={modalSignal.link} target="_blank" rel="noreferrer" className="modal-link">
               Open source
             </a>
           </div>
