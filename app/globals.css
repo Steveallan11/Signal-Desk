@@ -919,6 +919,203 @@ body {
   color: #94a3b8;
 }
 
+.source-registry {
+  margin-top: 18px;
+  border-radius: 10px;
+  border: 1px solid #0f172a;
+  background: #05060a;
+  padding: 18px;
+}
+
+.source-registry__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.source-card {
+  border: 1px solid #1f2937;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #0a0f1a;
+}
+
+.source-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.source-card__name {
+  font-size: 13px;
+  font-family: "Syne", sans-serif;
+  color: #e2e8f0;
+}
+
+.source-card__url {
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.source-card__badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.source-card__meta {
+  font-size: 10px;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.source-card__notes {
+  font-size: 11px;
+  color: #cbd5f5;
+  min-height: 40px;
+}
+
+.source-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.source-card__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-card__button {
+  font-size: 9px;
+  padding: 4px 8px;
+}
+
+.source-card__button--ghost {
+  background: #0e111a;
+  border: 1px solid #1e293b;
+}
+
+.source-card--paused {
+  border-color: #7c3aed;
+}
+
+.source-card--archived {
+  opacity: 0.5;
+}
+
+.source-registry__form {
+  margin-top: 18px;
+  border-top: 1px solid #0f172a;
+  padding-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-registry__form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.source-registry__form input,
+.source-registry__form select,
+.source-registry__form textarea {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #1a2433;
+  background: #070d16;
+  color: #e2e8f0;
+  font-family: var(--font-dm-mono), monospace;
+}
+
+.source-registry__watchlist-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.source-registry__watchlist-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #1a2433;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.source-registry__form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.source-registry__approved {
+  font-size: 10px;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.source-registry__message {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #34d399;
+}
+
+.watchlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.watchlist-card {
+  border: 1px solid #14203a;
+  border-radius: 8px;
+  padding: 12px;
+  background: #070b16;
+}
+
+.watchlist-card__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.watchlist-card__name {
+  font-family: "Syne", sans-serif;
+  color: #f8fafc;
+}
+
+.watchlist-card__priority {
+  font-size: 10px;
+  color: #94a3b8;
+  border: 1px solid #1c273a;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.watchlist-card__body {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
 .briefs-panel {
   margin-top: 20px;
   border: 1px solid #141b2a;

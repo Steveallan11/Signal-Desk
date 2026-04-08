@@ -18,6 +18,14 @@ import {
 } from "@/data/feeds";
 import { buildScheduledRuns, getKeyDatabases } from "@/lib/feedPlanner";
 import { LIVE_SCANS, UPLOAD_LOG } from "@/data/intelligence";
+import {
+  SOURCE_REGISTRY,
+  WATCHLISTS,
+  SourceRecord,
+  WatchlistRecord,
+  SourceType,
+  ScanFrequency,
+} from "@/data/sourceRegistry";
 
 const tabs = [
   { id: "cases", label: "CASES" },
@@ -42,6 +50,81 @@ const pipelineSteps: Array<{
   { id: "DELIVERED", label: "Delivered" },
 ];
 
+const SOURCE_TYPES: SourceType[] = [
+  "website",
+  "forum",
+  "social_account",
+  "news_site",
+  "registry",
+  "other",
+];
+
+const SCAN_FREQUENCIES: ScanFrequency[] = ["6h", "12h", "24h", "manual"];
+
+const PRIORITY_LEVELS: SourceRecord["priority"][] = ["LOW", "MEDIUM", "HIGH"];
+
+interface SourceFormState {
+  name: string;
+  url: string;
+  type: SourceType;
+  frequency: ScanFrequency;
+  priority: SourceRecord["priority"];
+  keywords: string;
+  entities: string;
+  watchlistIds: string[];
+  riskNotes: string;
+  accessNotes: string;
+  approved: boolean;
+}
+
+interface WatchlistFormState {
+  name: string;
+  priority: WatchlistRecord["priority"];
+  subjects: string;
+  aliases: string;
+  companyNames: string;
+  directors: string;
+  domains: string;
+  keywords: string;
+  hashtags: string;
+  excludedTerms: string;
+  linkedCaseIds: string;
+}
+
+const DEFAULT_SOURCE_FORM: SourceFormState = {
+  name: "",
+  url: "",
+  type: "website",
+  frequency: "24h",
+  priority: "MEDIUM",
+  keywords: "",
+  entities: "",
+  watchlistIds: [],
+  riskNotes: "",
+  accessNotes: "",
+  approved: true,
+};
+
+const DEFAULT_WATCHLIST_FORM: WatchlistFormState = {
+  name: "",
+  priority: "MEDIUM",
+  subjects: "",
+  aliases: "",
+  companyNames: "",
+  directors: "",
+  domains: "",
+  keywords: "",
+  hashtags: "",
+  excludedTerms: "",
+  linkedCaseIds: "",
+};
+
+const parseCommaList = (input: string): string[] =>
+  input
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("cases");
   const [selectedCase, setSelectedCase] = useState<CaseRecord | null>(CASES[0]);
@@ -54,6 +137,15 @@ export default function Dashboard() {
     "08:14 UTC · Discord + Telegram sync",
     "09:02 UTC · Manual signal pulse",
   ]);
+  const [sources, setSources] = useState<SourceRecord[]>(SOURCE_REGISTRY);
+  const [watchlists, setWatchlists] = useState<WatchlistRecord[]>(WATCHLISTS);
+  const [newSourceMessage, setNewSourceMessage] = useState<string | null>(null);
+  const [sourceForm, setSourceForm] = useState<SourceFormState>(() => ({
+    ...DEFAULT_SOURCE_FORM,
+  }));
+  const [watchlistForm, setWatchlistForm] = useState<WatchlistFormState>(() => ({
+    ...DEFAULT_WATCHLIST_FORM,
+  }));
 
   const stats = useMemo(() => {
     const pendingApprovals = CASES.filter(
@@ -147,6 +239,100 @@ export default function Dashboard() {
       .padStart(2, "0")}:${now.getUTCMinutes().toString().padStart(2, "0")} UTC`;
     setScanHistory((prev) =>
       [`${timestamp} · ${sourceName} force-run requested`, ...prev].slice(0, 4)
+    );
+  };
+
+
+  const updateSourceForm = (field: keyof SourceFormState, value: string | boolean | string[]) => {
+    setSourceForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const toggleWatchlistSelection = (watchlistId: string) => {
+    setSourceForm((prev) => {
+      const exists = prev.watchlistIds.includes(watchlistId);
+      return {
+        ...prev,
+        watchlistIds: exists
+          ? prev.watchlistIds.filter((id) => id !== watchlistId)
+          : [...prev.watchlistIds, watchlistId],
+      };
+    });
+  };
+
+  const handleSourceSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!sourceForm.name.trim() || !sourceForm.url.trim()) {
+      setNewSourceMessage("Name and URL are required.");
+      return;
+    }
+    const newSource: SourceRecord = {
+      id: `src-${Date.now()}`,
+      name: sourceForm.name.trim(),
+      url: sourceForm.url.trim(),
+      type: sourceForm.type,
+      watchlistIds: [...sourceForm.watchlistIds],
+      keywords: parseCommaList(sourceForm.keywords),
+      entities: parseCommaList(sourceForm.entities),
+      frequency: sourceForm.frequency,
+      priority: sourceForm.priority,
+      status: "ACTIVE",
+      approved: sourceForm.approved,
+      riskNotes: sourceForm.riskNotes.trim(),
+      accessNotes: sourceForm.accessNotes.trim(),
+      lastScanned: "Pending",
+    };
+    setSources((prev) => [newSource, ...prev]);
+    setSourceForm({ ...DEFAULT_SOURCE_FORM });
+    setNewSourceMessage("Source added. Preservation will archive it shortly.");
+    setTimeout(() => setNewSourceMessage(null), 4000);
+  };
+
+  const handleWatchlistSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!watchlistForm.name.trim()) {
+      return;
+    }
+    const newWatchlist: WatchlistRecord = {
+      id: `wl-${Date.now()}`,
+      name: watchlistForm.name.trim(),
+      priority: watchlistForm.priority,
+      subjects: parseCommaList(watchlistForm.subjects),
+      aliases: parseCommaList(watchlistForm.aliases),
+      companyNames: parseCommaList(watchlistForm.companyNames),
+      directors: parseCommaList(watchlistForm.directors),
+      domains: parseCommaList(watchlistForm.domains),
+      keywords: parseCommaList(watchlistForm.keywords),
+      hashtags: parseCommaList(watchlistForm.hashtags),
+      excludedTerms: parseCommaList(watchlistForm.excludedTerms),
+      linkedCaseIds: parseCommaList(watchlistForm.linkedCaseIds),
+    };
+    setWatchlists((prev) => [newWatchlist, ...prev]);
+    setWatchlistForm({ ...DEFAULT_WATCHLIST_FORM });
+  };
+
+  const toggleSourceStatus = (id: string, target: SourceRecord["status"]) => {
+    setSources((prev) =>
+      prev.map((source) =>
+        source.id === id ? { ...source, status: target, lastScanned: source.lastScanned } : source
+      )
+    );
+  };
+
+  const archiveSource = (id: string) => {
+    setSources((prev) =>
+      prev.map((source) => (source.id === id ? { ...source, status: "ARCHIVED" } : source))
+    );
+  };
+
+  const removeSource = (id: string) => {
+    setSources((prev) => prev.filter((source) => source.id !== id));
+  };
+
+  const toggleApproval = (id: string) => {
+    setSources((prev) =>
+      prev.map((source) =>
+        source.id === id ? { ...source, approved: !source.approved } : source
+      )
     );
   };
 
@@ -655,6 +841,314 @@ export default function Dashboard() {
     </div>
   );
 
+  const renderSourceRegistryPanel = () => {
+    if (!sources.length) {
+      return <p className="source-registry__empty">No sources configured yet.</p>;
+    }
+    return (
+      <div className="source-registry">
+        <div className="source-registry__grid">
+          {sources.map((source) => {
+            const watchlistNames = source.watchlistIds
+              .map((id) => watchlists.find((watchlist) => watchlist.id === id)?.name)
+              .filter(Boolean)
+              .join(", ");
+            return (
+              <div
+                key={source.id}
+                className={`source-card source-card--${source.status.toLowerCase()}`}
+              >
+                <div className="source-card__head">
+                  <div>
+                    <div className="source-card__name">{source.name}</div>
+                    <div className="source-card__url">{source.url}</div>
+                  </div>
+                  <div className="source-card__badges">
+                    <span className="badge badge--small">{source.type}</span>
+                    <span className="badge badge--small">{source.frequency}</span>
+                    <span
+                      className="badge badge--small"
+                      style={{
+                        borderColor:
+                          source.priority === "HIGH"
+                            ? "#f97316"
+                            : source.priority === "MEDIUM"
+                            ? "#facc15"
+                            : "#22c55e",
+                      }}
+                    >
+                      {source.priority}
+                    </span>
+                  </div>
+                </div>
+                <div className="source-card__meta">
+                  <div>Watchlists: {watchlistNames || "–"}</div>
+                  <div>Keywords: {source.keywords.join(", ") || "–"}</div>
+                  <div>Entities: {source.entities.join(", ") || "–"}</div>
+                </div>
+                <div className="source-card__notes">
+                  <p>{source.riskNotes}</p>
+                  <p>{source.accessNotes}</p>
+                </div>
+                <div className="source-card__footer">
+                  <span>Last scanned {source.lastScanned}</span>
+                  <div className="source-card__buttons">
+                    <button
+                      type="button"
+                      className="approve-btn source-card__button"
+                      onClick={() =>
+                        toggleSourceStatus(
+                          source.id,
+                          source.status === "ACTIVE" ? "PAUSED" : "ACTIVE"
+                        )
+                      }
+                    >
+                      {source.status === "ACTIVE" ? "Pause" : "Activate"}
+                    </button>
+                    <button
+                      type="button"
+                      className="approve-btn source-card__button source-card__button--ghost"
+                      onClick={() => toggleApproval(source.id)}
+                    >
+                      {source.approved ? "Revoke approval" : "Approve source"}
+                    </button>
+                    <button
+                      type="button"
+                      className="approve-btn source-card__button source-card__button--ghost"
+                      onClick={() => archiveSource(source.id)}
+                    >
+                      Archive
+                    </button>
+                    <button
+                      type="button"
+                      className="approve-btn source-card__button source-card__button--ghost"
+                      onClick={() => removeSource(source.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <form className="source-registry__form" onSubmit={handleSourceSubmit}>
+          <div className="source-registry__form-grid">
+            <label>
+              Source name
+              <input
+                value={sourceForm.name}
+                onChange={(event) => updateSourceForm("name", event.target.value)}
+                placeholder="Signal Desk Watchlist"
+              />
+            </label>
+            <label>
+              Source URL
+              <input
+                value={sourceForm.url}
+                onChange={(event) => updateSourceForm("url", event.target.value)}
+                placeholder="https://example.com/feed"
+              />
+            </label>
+            <label>
+              Type
+              <select
+                value={sourceForm.type}
+                onChange={(event) =>
+                  updateSourceForm("type", event.target.value as SourceType)
+                }
+              >
+                {SOURCE_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Frequency
+              <select
+                value={sourceForm.frequency}
+                onChange={(event) =>
+                  updateSourceForm("frequency", event.target.value as ScanFrequency)
+                }
+              >
+                {SCAN_FREQUENCIES.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Priority
+              <select
+                value={sourceForm.priority}
+                onChange={(event) =>
+                  updateSourceForm(
+                    "priority",
+                    event.target.value as SourceRecord["priority"]
+                  )
+                }
+              >
+                {PRIORITY_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label>
+            Keywords (comma separated)
+            <input
+              value={sourceForm.keywords}
+              onChange={(event) => updateSourceForm("keywords", event.target.value)}
+            />
+          </label>
+          <label>
+            Entities & watch targets
+            <input
+              value={sourceForm.entities}
+              onChange={(event) => updateSourceForm("entities", event.target.value)}
+            />
+          </label>
+          <div className="source-registry__watchlist-checks">
+            {watchlists.map((watchlist) => (
+              <label key={watchlist.id} className="source-registry__watchlist-label">
+                <input
+                  type="checkbox"
+                  checked={sourceForm.watchlistIds.includes(watchlist.id)}
+                  onChange={() => toggleWatchlistSelection(watchlist.id)}
+                />
+                {watchlist.name}
+              </label>
+            ))}
+          </div>
+          <label>
+            Risk notes
+            <textarea
+              rows={2}
+              value={sourceForm.riskNotes}
+              onChange={(event) => updateSourceForm("riskNotes", event.target.value)}
+            />
+          </label>
+          <label>
+            Access notes
+            <textarea
+              rows={2}
+              value={sourceForm.accessNotes}
+              onChange={(event) => updateSourceForm("accessNotes", event.target.value)}
+            />
+          </label>
+          <div className="source-registry__form-footer">
+            <label className="source-registry__approved">
+              <input
+                type="checkbox"
+                checked={sourceForm.approved}
+                onChange={(event) => updateSourceForm("approved", event.target.checked)}
+              />
+              Approved for scanning
+            </label>
+            <button type="submit" className="approve-btn">
+              Add source
+            </button>
+          </div>
+          {newSourceMessage && (
+            <div className="source-registry__message">{newSourceMessage}</div>
+          )}
+        </form>
+      </div>
+    );
+  };
+
+  const renderWatchlistPanel = () => (
+    <>
+      <div className="watchlist-grid">
+        {watchlists.map((watchlist) => (
+          <div key={watchlist.id} className="watchlist-card">
+            <div className="watchlist-card__head">
+              <span className="watchlist-card__name">{watchlist.name}</span>
+              <span className="watchlist-card__priority">{watchlist.priority}</span>
+            </div>
+            <div className="watchlist-card__body">
+              <p>
+                <strong>Subjects:</strong> {watchlist.subjects.join(", ") || "–"}
+              </p>
+              <p>
+                <strong>Keywords:</strong> {watchlist.keywords.join(", ") || "–"}
+              </p>
+              <p>
+                <strong>Linked Cases:</strong>{" "}
+                {watchlist.linkedCaseIds.length ? watchlist.linkedCaseIds.join(", ") : "–"}
+              </p>
+              <p>
+                <strong>Domains:</strong> {watchlist.domains.join(", ") || "–"}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <form className="source-registry__form" onSubmit={handleWatchlistSubmit}>
+        <div className="source-registry__form-grid">
+          <label>
+            Watchlist name
+            <input
+              value={watchlistForm.name}
+              onChange={(event) =>
+                setWatchlistForm((prev) => ({ ...prev, name: event.target.value }))
+              }
+            />
+          </label>
+          <label>
+            Priority
+            <select
+              value={watchlistForm.priority}
+              onChange={(event) =>
+                setWatchlistForm((prev) => ({
+                  ...prev,
+                  priority: event.target.value as WatchlistRecord["priority"],
+                }))
+              }
+            >
+              <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="HIGH">HIGH</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          Subjects (comma separated)
+          <input
+            value={watchlistForm.subjects}
+            onChange={(event) =>
+              setWatchlistForm((prev) => ({ ...prev, subjects: event.target.value }))
+            }
+          />
+        </label>
+        <label>Keywords</label>
+        <input
+          value={watchlistForm.keywords}
+          onChange={(event) =>
+            setWatchlistForm((prev) => ({ ...prev, keywords: event.target.value }))
+          }
+        />
+        <label>
+          Linked case IDs (comma separated)
+          <input
+            value={watchlistForm.linkedCaseIds}
+            onChange={(event) =>
+              setWatchlistForm((prev) => ({ ...prev, linkedCaseIds: event.target.value }))
+            }
+          />
+        </label>
+        <button type="submit" className="approve-btn">
+          Create watchlist
+        </button>
+      </form>
+    </>
+  );
+
   const renderRegistryTab = () => (
     <div>
       <div className="section-header">
@@ -846,10 +1340,14 @@ export default function Dashboard() {
               >
                 Open resource
               </a>
-            </div>
-          </div>
         </div>
-      );
+      </div>
+      <div className="section-title">SOURCE REGISTRY</div>
+      {renderSourceRegistryPanel()}
+      <div className="section-title">SOURCE WATCHLISTS</div>
+      {renderWatchlistPanel()}
+    </div>
+  );
     };
 
     return (
